@@ -31,8 +31,7 @@ async def cmd_send_all(message: types.Message, command: CommandObject):
     users = await db.get_all_users()
     for uid in users:
         try:
-            target = uid[0] if isinstance(uid, tuple) else uid
-            await bot.send_message(target, command.args)
+            await bot.send_message(uid, command.args)
             await asyncio.sleep(0.05)
         except: pass
     await message.answer("✅ Рассылка завершена!")
@@ -40,8 +39,7 @@ async def cmd_send_all(message: types.Message, command: CommandObject):
 @dp.message(F.text == "💎 Купить UC")
 async def shop_menu(message: types.Message):
     await message.answer(
-        "🛒 **Выберите необходимое количество UC!**\n\n"
-        "❗ **ВАЖНО!** Начисление UC будет производиться **ПОСЛЕ 15:00 по МСК**!", 
+        "🛒 **Выберите пак UC!**\n\n❗ **ВАЖНО!** Начисление **ПОСЛЕ 15:00 МСК**!", 
         reply_markup=kb.buy_tokens, 
         parse_mode="Markdown"
     )
@@ -65,7 +63,6 @@ async def support(message: types.Message):
 @dp.callback_query(F.data.startswith("buy_"))
 async def process_buy(callback: types.CallbackQuery):
     await callback.answer()
-    # ИСПРАВЛЕНО: берем конкретное число, а не список
     amount = callback.data.split("_")[-1]
     user_data = await db.get_profile(callback.from_user.id)
     if user_data["pubg_id"] == "Не указан":
@@ -73,13 +70,7 @@ async def process_buy(callback: types.CallbackQuery):
 
     now = datetime.now(pytz.timezone('Europe/Moscow')).hour
     warn = "\n\n⚠️ **Админ на учебе до 15:00 МСК!**" if 8 <= now < 15 else ""
-    await callback.message.answer(
-        f"💳 **Оплата: {amount} UC**\n\n"
-        f"🏦 Карта (Беларусбанк): `4246 4100 8081 2321`\n"
-        f"👤 Владелец: Наталья К.{warn}\n\n"
-        "✅ Пришли скриншот чека сюда.", 
-        parse_mode="Markdown"
-    )
+    await callback.message.answer(f"💳 **Оплата: {amount} UC**\n\n🏦 Карта: `4246 4100 8081 2321`\n👤 Владелец: Наталья К.{warn}\n\n✅ Пришли скриншот чека сюда.", parse_mode="Markdown")
 
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
@@ -87,35 +78,28 @@ async def handle_screenshot(message: types.Message):
     p_id = user_data["pubg_id"]
     await message.answer("⏳ Чек получен! Ждите подтверждения.")
     
-    # Кнопки: adm | действие | ID
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_yes_{message.from_user.id}")],
-        [InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]
+        [InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_done_{message.from_user.id}")],
+        [InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_bad_{message.from_user.id}")]
     ])
     
-    # ИСПРАВЛЕНО: Убран parse_mode, чтобы символы в username или ID не ломали отправку
-    await bot.send_photo(
-        config.ADMIN_ID, 
-        message.photo[-1].file_id, 
-        caption=f"💰 НОВЫЙ ЧЕК!\n🎮 PUBG ID: {p_id}\n👤 От: @{message.from_user.username}\n🆔 ID: {message.from_user.id}", 
-        reply_markup=adm_kb
-    )
+    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, 
+                         caption=f"💰 **НОВЫЙ ЧЕК!**\n🎮 PUBG ID: `{p_id}`\n👤 От: @{message.from_user.username}", 
+                         reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
     if callback.from_user.id != config.ADMIN_ID: return
     
     data = callback.data.split("_")
-    action = data[1]  # yes или no
-    user_id = int(data[2])  # ID юзера
+    action, user_id = data[1], int(data[2])
 
-    if action == "yes":
-        await bot.send_message(user_id, "✅ **Ваша оплата подтверждена!**\nUC скоро будут зачислены.")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ СТАТУС: ОДОБРЕНО")
+    if action == "done":
+        await bot.send_message(user_id, "✅ **Оплата подтверждена!** UC скоро будут.")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОДОБРЕНО")
     else:
-        await bot.send_message(user_id, "❌ **Оплата отклонена.**\nСвяжитесь с поддержкой.")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ СТАТУС: ОТКЛОНЕНО")
-    
+        await bot.send_message(user_id, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКЛОНЕНО")
     await callback.answer()
 
 @dp.callback_query(F.data == "edit_id")
@@ -130,8 +114,7 @@ async def save_id(message: types.Message, state: FSMContext):
         await db.update_pubg_id(message.from_user.id, message.text)
         await state.clear()
         await message.answer(f"✅ ID `{message.text}` сохранен!", reply_markup=kb.main_menu)
-    else: 
-        await message.answer("❌ Введите корректный ID (7-11 цифр).")
+    else: await message.answer("❌ Введите корректный ID (7-11 цифр).")
 
 async def main():
     await db.db_start()
