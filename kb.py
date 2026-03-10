@@ -22,6 +22,7 @@ buy_tokens = InlineKeyboardMarkup(
     ]
 )
 
+# Кнопка перехода в канал для Отзывов и Розыгрышей
 social_kb = InlineKeyboardMarkup(
     inline_keyboard=[[InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me/ad1skauc")]]
 )
