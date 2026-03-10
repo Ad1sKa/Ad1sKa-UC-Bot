@@ -1,9 +1,12 @@
 import aiosqlite
 import os
 
-# Настройка пути к базе данных, чтобы Render её видел
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.db")
+# Автоматический выбор пути: /tmp для Render, локально для Windows
+if os.path.exists('/tmp'):
+    DB_PATH = "/tmp/database.db"
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 async def db_start():
     async with aiosqlite.connect(DB_PATH) as db:
