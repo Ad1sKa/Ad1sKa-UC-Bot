@@ -1,0 +1,3 @@
+TOKEN = "8235277253:AAGA2-ssGt4_qQt25VFi6MDZwWh1b8aTC-s"
+ADMIN_ID = 6762780884  # ТВОЙ ЛИЧНЫЙ ID
+SUPPORT_LINK = "@ad1ska_pubg"
