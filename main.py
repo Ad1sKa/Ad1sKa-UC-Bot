@@ -47,6 +47,7 @@ async def stats_cmd(message: types.Message):
 # --- ГЛАВНОЕ МЕНЮ ---
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
+    if message.chat.type != 'private': return
     await db.register_user(message.from_user.id)
     await message.answer(f"Привет! 🏆 Магазин Ad1sKa UC готов к работе.", reply_markup=kb.main_menu)
 
@@ -59,14 +60,14 @@ async def profile_menu(message: types.Message):
     user_data = await db.get_profile(message.from_user.id)
     if not user_data: return await message.answer("Жми /start")
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
-    msg = f"👤 Профиль:\n\n🆔 TG ID: {message.from_user.id}\n🎮 PUBG ID: {pid}\n💰 Баланс: {bal}₽"
+    msg = f"👤 Профиль:\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     edit_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")]])
-    await message.answer(msg, reply_markup=edit_kb)
+    await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 График (МСК):\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00!*")
+    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00!*", parse_mode="Markdown")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_handler(message: types.Message):
@@ -74,13 +75,27 @@ async def support_handler(message: types.Message):
 
 @dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
 async def social_links(message: types.Message):
-    await message.answer("🔗 Все новости, отзывы и бонусы в нашем канале:", reply_markup=kb.social_kb)
+    await message.answer("🔗 **Все новости, отзывы и промокоды в нашем канале!**", reply_markup=kb.social_kb, parse_mode="Markdown")
+
+# --- ПРОМОКОДЫ ---
+@dp.callback_query(F.data == "act_promo")
+async def start_promo(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.answer("🎁 **Введите ваш промокод:**")
+    await state.set_state(Form.waiting_for_promo)
+
+@dp.message(Form.waiting_for_promo)
+async def process_promo(message: types.Message, state: FSMContext):
+    res = await db.activate_promo_db(message.from_user.id, message.text)
+    await message.answer(res)
+    await state.clear()
 
 # --- ЛОГИКА КОРЗИНЫ ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     data = callback.data.split("_")
+    # Индексы: 0-cart, 1-add, 2-uc, 3-price
     uc_val, price_val = int(data[2]), int(data[3])
 
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
@@ -118,57 +133,52 @@ async def checkout(callback: types.CallbackQuery):
         total_price = int(total_price * (1 - user_data["discount"] / 100))
 
     await callback.message.answer(
-        f"💳 Оформление заказа:\n\n"
-        f"💎 Товар: {cart['uc']} UC\n"
-        f"💰 К оплате: {total_price}₽\n"
-        f"🎮 PUBG ID: {user_data['pubg_id']}\n\n"
-        f"🏦 Карта: 4246 4100 8081 2321\n"
-        f"👤 Владелец: KERYMOVA NATALIA\n\n"
-        "✅ Пришли скриншот чека сюда."
+        f"💳 **Оформление заказа:**\n\n💎 Товар: {cart['uc']} UC\n💰 К оплате: **{total_price}₽**\n🎮 ID: `{user_data['pubg_id']}`\n\n🏦 Карта: `4246 4100 8081 2321`\n👤 Владелец: `KERYMOVA NATALIA`\n\n✅ Пришли скриншот чека сюда.",
+        parse_mode="Markdown"
     )
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- ПОДТВЕРЖДЕНИЕ ЧЕКА (С ТЕКСТОМ ОБ ОТЗЫВЕ) ---
+# --- ПОДТВЕРЖДЕНИЕ ЧЕКА (ОТПРАВКА АДМИНУ) ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
+    if message.chat.type != 'private': return
     user_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения администратором.")
+    
+    # Кнопки: adm_действие_айди
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_done_{message.from_user.id}")],
         [InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_bad_{message.from_user.id}")]
     ])
-    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, 
-                         caption=f"💰 Чек!\n🎮 ID: {user_data['pubg_id']}\n👤 @{message.from_user.username}", reply_markup=adm_kb)
+    
+    await bot.send_photo(
+        config.ADMIN_ID, 
+        message.photo[-1].file_id, 
+        caption=f"💰 **НОВЫЙ ЗАКАЗ!**\n🎮 PUBG ID: `{user_data['pubg_id']}`\n👤 От: @{message.from_user.username}", 
+        reply_markup=adm_kb,
+        parse_mode="Markdown"
+    )
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
     await callback.answer()
+    if callback.from_user.id != config.ADMIN_ID: return
+    
+    # РАЗБОР ДАННЫХ: [0]adm, [1]действие, [2]айди
     data = callback.data.split("_")
-    action, uid = data[1], int(data[2])
+    action = data[1]
+    uid = int(data[2])
     
     if action == "done":
-        # ТОТ САМЫЙ ТЕКСТ ПОСЛЕ НАЧИСЛЕНИЯ
         await bot.send_message(uid, "💎 **UC были зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале — нам это очень важно! ⭐", parse_mode="Markdown")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ СТАТУС: ОДОБРЕНО")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ **СТАТУС: ОДОБРЕНО**", parse_mode="Markdown")
     else:
         await bot.send_message(uid, "❌ **Оплата отклонена.**\nСвяжитесь с поддержкой для уточнения деталей.")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ СТАТУС: ОТКЛОНЕНО")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ **СТАТУС: ОТКЛОНЕНО**", parse_mode="Markdown")
     
-    await callback.message.delete_reply_markup() # Убираем кнопки после нажатия
+    await callback.message.delete_reply_markup()
 
-# --- ПРОМОКОДЫ И ID ---
-@dp.callback_query(F.data == "act_promo")
-async def start_promo(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer()
-    await callback.message.answer("⌨️ Введите промокод:")
-    await state.set_state(Form.waiting_for_promo)
-
-@dp.message(Form.waiting_for_promo)
-async def process_promo(message: types.Message, state: FSMContext):
-    res = await db.activate_promo_db(message.from_user.id, message.text)
-    await message.answer(res)
-    await state.clear()
-
+# --- ВВОД ID ---
 @dp.callback_query(F.data == "edit_id")
 async def edit_id(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.answer("⌨️ Введите цифровой PUBG ID:")
@@ -180,7 +190,6 @@ async def save_id(message: types.Message, state: FSMContext):
         await db.update_pubg_id(message.from_user.id, message.text); await state.clear()
         await message.answer(f"✅ ID {message.text} сохранен!", reply_markup=kb.main_menu)
 
-# --- ЗАПУСК ---
 async def main():
     await db.db_start()
     asyncio.create_task(start_webserver())
