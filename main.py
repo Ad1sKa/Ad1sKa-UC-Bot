@@ -4,11 +4,11 @@ import os
 from datetime import datetime
 import pytz
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiohttp import web # Важно для Render
+from aiohttp import web
 
 import config
 import kb
@@ -18,14 +18,13 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище корзин
 user_carts = {}
 
 class Form(StatesGroup):
     waiting_for_pubg_id = State()
     waiting_for_promo = State()
 
-# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (ЧТОБЫ НЕ ВЫКЛЮЧАЛСЯ) ---
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 async def handle(request):
     return web.Response(text="Bot is Live!")
 
@@ -44,21 +43,6 @@ async def stats_cmd(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: return
     users = await db.get_all_users()
     await message.answer(f"📊 Всего пользователей в базе: {len(users)}")
-
-@dp.message(Command("send"))
-async def cmd_send_all(message: types.Message, command: CommandObject):
-    if message.from_user.id != config.ADMIN_ID: return
-    if not command.args: return await message.answer("Пример: /send Текст")
-    users = await db.get_all_users()
-    count = 0
-    for uid in users:
-        try:
-            target = uid[0] if isinstance(uid, tuple) else uid
-            await bot.send_message(target, command.args)
-            count += 1
-            await asyncio.sleep(0.05)
-        except: pass
-    await message.answer(f"✅ Рассылка завершена! Получили: {count} чел.")
 
 # --- ГЛАВНОЕ МЕНЮ ---
 @dp.message(Command("start"))
@@ -90,11 +74,7 @@ async def support_handler(message: types.Message):
 
 @dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
 async def social_links(message: types.Message):
-    kb_p = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
-        [InlineKeyboardButton(text="🔗 Наш канал", url="https://t.me/ad1skauc")]
-    ])
-    await message.answer("🔗 Все новости, ссылка на группу с отзывами и бонусы в нашем канале:", reply_markup=kb_p)
+    await message.answer("🔗 Все новости, отзывы и бонусы в нашем канале:", reply_markup=kb.social_kb)
 
 # --- ЛОГИКА КОРЗИНЫ ---
 @dp.callback_query(F.data.startswith("cart_add_"))
@@ -148,7 +128,7 @@ async def checkout(callback: types.CallbackQuery):
     )
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- ПОДТВЕРЖДЕНИЕ ЧЕКА ---
+# --- ПОДТВЕРЖДЕНИЕ ЧЕКА (С ТЕКСТОМ ОБ ОТЗЫВЕ) ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     user_data = await db.get_profile(message.from_user.id)
@@ -165,13 +145,18 @@ async def admin_decision(callback: types.CallbackQuery):
     await callback.answer()
     data = callback.data.split("_")
     action, uid = data[1], int(data[2])
+    
     if action == "done":
-        await bot.send_message(uid, "✅ Оплата подтверждена! UC скоро будут зачислены.")
+        # ТОТ САМЫЙ ТЕКСТ ПОСЛЕ НАЧИСЛЕНИЯ
+        await bot.send_message(uid, "💎 **UC были зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале — нам это очень важно! ⭐", parse_mode="Markdown")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ СТАТУС: ОДОБРЕНО")
     else:
-        await bot.send_message(uid, "❌ Оплата отклонена.")
-    await callback.message.delete()
+        await bot.send_message(uid, "❌ **Оплата отклонена.**\nСвяжитесь с поддержкой для уточнения деталей.")
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ СТАТУС: ОТКЛОНЕНО")
+    
+    await callback.message.delete_reply_markup() # Убираем кнопки после нажатия
 
-# --- ВВОД ID И ПРОМО ---
+# --- ПРОМОКОДЫ И ID ---
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -198,7 +183,7 @@ async def save_id(message: types.Message, state: FSMContext):
 # --- ЗАПУСК ---
 async def main():
     await db.db_start()
-    asyncio.create_task(start_webserver()) # Запуск сервера для Render
+    asyncio.create_task(start_webserver())
     print("Бот успешно запущен!")
     await dp.start_polling(bot)
 
