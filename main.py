@@ -92,7 +92,7 @@ async def support_handler(message: types.Message):
 async def social_links(message: types.Message):
     kb_p = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
-        [InlineKeyboardButton(text="🔗 Наш канал", url="https://t.me")]
+        [InlineKeyboardButton(text="🔗 Наш канал", url="https://t.me/ad1skauc")]
     ])
     await message.answer("🔗 Все новости, ссылка на группу с отзывами и бонусы в нашем канале:", reply_markup=kb_p)
 
