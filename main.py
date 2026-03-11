@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
-import pytz
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -64,20 +62,12 @@ async def profile_menu(message: types.Message):
     edit_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")]])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00 МСК!*", parse_mode="Markdown")
-
-@dp.message(F.text == "🎧 Поддержка")
-async def support_handler(message: types.Message):
-    await message.answer(f"🎧 По всем вопросам пишите менеджеру: @{config.SUPPORT_LINK}")
-
 # --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Формат: cart_add_UC_PRICE
+    # Индексы: 0:cart, 1:add, 2:uc, 3:price
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -96,34 +86,22 @@ async def checkout(callback: types.CallbackQuery):
     u_data = await db.get_profile(uid)
     if not u_data or u_data["pubg_id"] == "Не указан": return await callback.message.answer("⚠️ Укажи ID в профиле!")
     
-    cart = user_carts[uid]
-    total = cart['price']
+    cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    payment_msg = (
-        f"💳 **Оформление заказа**\n\n"
-        f"💎 **Товар:** {cart['uc']} UC\n"
-        f"💰 **К оплате:** {total}₽\n"
-        f"🎮 **PUBG ID:** `{u_data['pubg_id']}`\n\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n\n"
-        f"👤 **Владелец:**\n`KERYMOVA NATALIA`\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n\n"
-        f"✅ После оплаты пришли **скриншот чека** в этот чат!"
+    pay_msg = (
+        f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
+        f"🏦 **Карта (Беларусбанк):**\n`НОМЕР_КАРТЫ`\n👤 **Владелец:** `ИМЯ`\n\n✅ Пришли скрин чека сюда!"
     )
-    await callback.message.answer(payment_msg, parse_mode="Markdown")
+    await message.answer(pay_msg, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА (ИСПРАВЛЕНО) ---
+# --- АДМИНКА (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ) ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
-    # Убрали проверку chat.type для стабильности на сервере
     u_data = await db.get_profile(message.from_user.id)
-    # Если юзера нет в базе (база сбросилась), регистрируем на лету
-    if not u_data:
-        await db.register_user(message.from_user.id)
-        u_data = await db.get_profile(message.from_user.id)
-        
+    p_id = u_data["pubg_id"] if u_data else "Не указан"
+    
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
     
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -131,17 +109,13 @@ async def handle_screenshot(message: types.Message):
         [InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]
     ])
     
-    # Отправка АДМИНУ (config.ADMIN_ID)
-    try:
-        await bot.send_photo(
-            chat_id=config.ADMIN_ID,
-            photo=message.photo[-1].file_id, 
-            caption=f"💰 **НОВЫЙ ЧЕК!**\n🎮 ID: `{u_data['pubg_id']}`\n👤 Юзер: @{message.from_user.username}", 
-            reply_markup=adm_kb,
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        logging.error(f"Ошибка отправки чека админу: {e}")
+    # ПРИНУДИТЕЛЬНАЯ ОТПРАВКА АДМИНУ
+    await bot.send_photo(
+        chat_id=config.ADMIN_ID,
+        photo=message.photo[-1].file_id, 
+        caption=f"💰 **НОВЫЙ ЧЕК!**\n🎮 ID: `{p_id}`\n👤 Юзер: @{message.from_user.username}", 
+        reply_markup=adm_kb
+    )
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
@@ -152,25 +126,25 @@ async def admin_decision(callback: types.CallbackQuery):
     action, uid = d[1], int(d[2])
     
     if action == "ok":
-        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒", parse_mode="Markdown")
+        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒")
         next_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Выполнить (Отправить отзыв)", callback_data=f"adm_done_{uid}")]
+            [InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]
         ])
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА. Ждем 15:00.", reply_markup=next_kb, parse_mode="Markdown")
-    
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА. Ждем 15:00.", reply_markup=next_kb)
     elif action == "done":
         await bot.send_message(uid, "💎 **UC зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО (Юзер уведомлен)")
-    
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
     elif action == "no":
         await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
 
-# --- ВСЁ ОСТАЛЬНОЕ ---
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
-async def social_links(message: types.Message):
+# --- ПРОМОКОДЫ И ID ---
+@dp.message(F.text == "🎟 Промокоды и Скидки")
+@dp.message(F.text == "⭐ Отзывы")
+@dp.message(F.text == "🎁 Розыгрыши")
+async def social(message: types.Message):
     kb_p = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🎁 Промокод", callback_data="act_promo")], [InlineKeyboardButton(text="🔗 Канал", url="https://t.me")]])
-    await message.answer("🔗 Все новости и бонусы в нашем канале:", reply_markup=kb_p)
+    await message.answer("🔗 Все новости и бонусы в канале:", reply_markup=kb_p)
 
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
@@ -182,7 +156,7 @@ async def process_promo(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data == "edit_id")
 async def edit_id(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer(); await callback.message.answer("⌨️ Введи PUBG ID:"); await state.set_state(Form.waiting_for_pubg_id)
+    await callback.answer(); await callback.message.answer("⌨️ Введи ID:"); await state.set_state(Form.waiting_for_pubg_id)
 
 @dp.message(Form.waiting_for_pubg_id)
 async def save_id(message: types.Message, state: FSMContext):
