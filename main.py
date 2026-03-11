@@ -70,6 +70,7 @@ async def add_to_cart(callback: types.CallbackQuery):
     # Индексы: 0:cart, 1:add, 2:uc, 3:price
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
+    if user_carts[uid]['count'] >= 10: return await callback.answer("❌ Максимум 10!", show_alert=True)
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
     await callback.message.edit_text(f"🛒 Корзина ({user_carts[uid]['count']}/10):\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
@@ -79,29 +80,35 @@ async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
     await callback.answer("🗑 Очищено"); await callback.message.edit_text("🛒 Корзина пуста.", reply_markup=kb.buy_tokens)
 
+# --- ОФОРМЛЕНИЕ ЗАКАЗА (ИСПРАВЛЕНО) ---
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
-    await callback.answer(); uid = callback.from_user.id
-    if uid not in user_carts or user_carts[uid]['count'] == 0: return await callback.message.answer("🛒 Пусто!")
-    u_data = await db.get_profile(uid)
-    if not u_data or u_data["pubg_id"] == "Не указан": return await callback.message.answer("⚠️ Укажи ID в профиле!")
+    await callback.answer()
+    uid = callback.from_user.id
+    if uid not in user_carts or user_carts[uid]['count'] == 0: 
+        return await callback.message.answer("🛒 Ваша корзина пуста!")
     
-    cart = user_carts[uid]; total = cart['price']
-    if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
+    u_data = await db.get_profile(uid)
+    if not u_data or u_data["pubg_id"] == "Не указан": 
+        return await callback.message.answer("⚠️ Сначала укажите PUBG ID в профиле!")
+    
+    cart = user_carts[uid]
+    total = cart['price']
+    if u_data["discount"] > 0: 
+        total = int(total * (1 - u_data["discount"] / 100))
     
     pay_msg = (
         f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
-        f"🏦 **Карта (Беларусбанк):**\n`НОМЕР_КАРТЫ`\n👤 **Владелец:** `ИМЯ`\n\n✅ Пришли скрин чека сюда!"
+        f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n✅ Пришли скрин чека сюда!"
     )
-    await message.answer(pay_msg, parse_mode="Markdown")
+    await callback.message.answer(pay_msg, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ) ---
+# --- АДМИНКА (ПРОВЕРЕНО) ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     p_id = u_data["pubg_id"] if u_data else "Не указан"
-    
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
     
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -109,7 +116,6 @@ async def handle_screenshot(message: types.Message):
         [InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]
     ])
     
-    # ПРИНУДИТЕЛЬНАЯ ОТПРАВКА АДМИНУ
     await bot.send_photo(
         chat_id=config.ADMIN_ID,
         photo=message.photo[-1].file_id, 
@@ -121,16 +127,13 @@ async def handle_screenshot(message: types.Message):
 async def admin_decision(callback: types.CallbackQuery):
     await callback.answer()
     if callback.from_user.id != config.ADMIN_ID: return
-    
     d = callback.data.split("_")
     action, uid = d[1], int(d[2])
     
     if action == "ok":
-        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒")
-        next_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]
-        ])
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА. Ждем 15:00.", reply_markup=next_kb)
+        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒", parse_mode="Markdown")
+        next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
         await bot.send_message(uid, "💎 **UC зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
@@ -138,10 +141,16 @@ async def admin_decision(callback: types.CallbackQuery):
         await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
 
-# --- ПРОМОКОДЫ И ID ---
-@dp.message(F.text == "🎟 Промокоды и Скидки")
-@dp.message(F.text == "⭐ Отзывы")
-@dp.message(F.text == "🎁 Розыгрыши")
+# --- ВСЁ ОСТАЛЬНОЕ ---
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
+
+@dp.message(F.text == "🎧 Поддержка")
+async def support_h(message: types.Message):
+    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
 async def social(message: types.Message):
     kb_p = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🎁 Промокод", callback_data="act_promo")], [InlineKeyboardButton(text="🔗 Канал", url="https://t.me")]])
     await message.answer("🔗 Все новости и бонусы в канале:", reply_markup=kb_p)
@@ -164,7 +173,7 @@ async def save_id(message: types.Message, state: FSMContext):
 
 async def main():
     await db.db_start(); asyncio.create_task(start_webserver())
-    print("Бот запущен!"); await dp.start_polling(bot)
+    print("Запущено!"); await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
