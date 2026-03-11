@@ -1,6 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-# ГЛАВНОЕ МЕНЮ
+# Главное меню
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💎 Купить UC"), KeyboardButton(text="👤 Профиль")],
@@ -11,7 +11,7 @@ main_menu = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ВИТРИНА КОРЗИНЫ
+# Витрина корзины
 buy_tokens = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="📦 325 UC — 380₽", callback_data="cart_add_325_380")],
@@ -25,11 +25,10 @@ buy_tokens = InlineKeyboardMarkup(
     ]
 )
 
-# ИСПРАВЛЕННАЯ КНОПКА КАНАЛА
-# Замени 'твой_канал' на реальный логин своего канала
+# Кнопки со ссылкой на твой канал
 social_kb = InlineKeyboardMarkup(
     inline_keyboard=[
-	[InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
+        [InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
         [InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me/ad1skauc")]
     ]
 )
