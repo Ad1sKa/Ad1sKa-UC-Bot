@@ -15,11 +15,15 @@ main_menu = ReplyKeyboardMarkup(
 buy_tokens = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="📦 60 UC — 80₽", callback_data="cart_add_60_80")],
-        [InlineKeyboardButton(text="📦 325 UC — 405₽", callback_data="cart_add_325_405")],
-        [InlineKeyboardButton(text="📦 660 UC — 800₽", callback_data="cart_add_660_800")],
-        [InlineKeyboardButton(text="📦 1800 UC — 2000₽", callback_data="cart_add_1800_2000")],
-        [InlineKeyboardButton(text="📦 3850 UC — 3925₽", callback_data="cart_add_3925")],
-        [InlineKeyboardButton(text="📦 8100 UC — 8000₽", callback_data="cart_add_8100_8000")],
+        [InlineKeyboardButton(text="📦 325 UC — 400₽", callback_data="cart_add_325_400")],
+        [InlineKeyboardButton(text="📦 660 UC — 750₽", callback_data="cart_add_660_750")],
+        [InlineKeyboardButton(text="📦 1800 UC — 1920₽", callback_data="cart_add_1800_1920")],
+        [InlineKeyboardButton(text="📦 3850 UC — 3800₽", callback_data="cart_add_3850_3800")],
+        [InlineKeyboardButton(text="📦 8100 UC — 7400₽", callback_data="cart_add_8100_7400")],
+        [InlineKeyboardButton(text="📦 16200 UC — 15200₽", callback_data="cart_add_16200_15200")],
+        [InlineKeyboardButton(text="📦 24300 UC — 22700₽", callback_data="cart_add_24300_7400")],
+        [InlineKeyboardButton(text="📦 32400 UC — 30000₽", callback_data="cart_add_32400_30000")],
+        [InlineKeyboardButton(text="📦 40500 UC — 38000₽", callback_data="cart_add_40500_38000")],
         [InlineKeyboardButton(text="🛒 Оформить заказ", callback_data="cart_checkout")],
         [InlineKeyboardButton(text="🗑 Очистить корзину", callback_data="cart_clear")]
     ]
