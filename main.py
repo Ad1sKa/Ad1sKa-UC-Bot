@@ -50,7 +50,7 @@ async def stats_cmd(message: types.Message):
 # --- МЕНЮ ---
 @dp.message(F.text == "💎 Купить UC")
 async def shop_menu(message: types.Message):
-    await message.answer("🛒 Добавляйте паки в корзину (до 10 шт):", reply_markup=kb.buy_tokens)
+    await message.answer("🛒 Добавляйте паки в корзину:", reply_markup=kb.buy_tokens)
 
 @dp.message(F.text == "👤 Профиль")
 async def profile_menu(message: types.Message):
@@ -83,7 +83,7 @@ async def add_to_cart(callback: types.CallbackQuery):
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
-    await callback.message.edit_text(f"🛒 Корзина ({user_carts[uid]['count']}/10):\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
+    await callback.message.edit_text(f"🛒 Корзина:\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
 
 @dp.callback_query(F.data == "cart_clear")
 async def clear_cart(callback: types.CallbackQuery):
