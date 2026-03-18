@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Инициализация оплаты
+# Инициализация оплаты (Проверь, что в config.py есть CRYPTO_PAY_TOKEN)
 crypto = CryptoPay(token=config.CRYPTO_PAY_TOKEN)
 
 user_carts = {}
@@ -66,27 +66,17 @@ async def profile_menu(message: types.Message):
     edit_kb = InlineKeyboardMarkup(inline_keyboard=])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00 МСК!*", parse_mode="Markdown")
-
-@dp.message(F.text == "🎧 Поддержка")
-async def support_h(message: types.Message):
-    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
-
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
-async def social_links(message: types.Message):
-    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
-
 # --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
+    # Индексы: 0:cart, 1:add, 2:uc, 3:price
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
+    # Убрали счетчик (0/10) как ты просил
     await callback.message.edit_text(f"🛒 Корзина:\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
 
 @dp.callback_query(F.data == "cart_clear")
@@ -104,34 +94,29 @@ async def checkout(callback: types.CallbackQuery):
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    # СОЗДАНИЕ СЧЕТА В CRYPTOBOT
+    # Создаем инвойс в CryptoBot
     invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
     
     pay_kb = InlineKeyboardMarkup(inline_keyboard=,
     ])
 
     pay_msg = (
-        f"💳 **Оформление заказа**\n\n"
-        f"💎 **Товар:** {cart['uc']} UC\n"
-        f"💰 **К оплате:** {total}₽\n"
-        f"🎮 **ID:** `{u_data['pubg_id']}`\n\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"1️⃣ **Способ: CryptoBot (Авто)**\nНажми кнопку ниже и оплати картой или криптой.\n\n"
-        f"2️⃣ **Способ: На карту (Ручной)**\n🏦 `4246 4100 8081 2321` (Беларусбанк)\n👤 `KERYMOVA NATALIA`\n✅ Пришли скрин чека сюда!\n"
-        f"➖➖➖➖➖➖➖➖➖➖"
+        f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
+        f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n"
+        f"✅ Нажми на кнопку ниже для авто-оплаты или пришли скрин чека при переводе на карту!"
     )
     await callback.message.answer(pay_msg, reply_markup=pay_kb, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
 # ПРОВЕРКА АВТО-ОПЛАТЫ
-@dp.callback_query(F.data.startswith("check_pay_"))
-async def check_payment(callback: types.CallbackQuery):
-    invoice_id = int(callback.data.split("_")[2])
-    invoices = await crypto.get_invoices(invoice_ids=invoice_id)
+@dp.callback_query(F.data.startswith("check_"))
+async def check_pay(callback: types.CallbackQuery):
+    inv_id = int(callback.data.split("_")[1])
+    invs = await crypto.get_invoices(invoice_ids=inv_id)
     
-    if invoices.status == 'paid':
-        await callback.message.answer("✅ Оплата получена! Заказ передан админу.")
-        await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nСумма: {invoices.amount} {invoices.fiat}\nЮзер: @{callback.from_user.username}")
+    if invs and invs.status == 'paid':
+        await callback.message.answer("✅ Оплата получена! Админ уведомлен.")
+        await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nЮзер: @{callback.from_user.username}\nСумма: {invs.amount} {invs.fiat}")
     else:
         await callback.answer("❌ Оплата еще не поступила!", show_alert=True)
 
