@@ -68,9 +68,9 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     
-    # ИСПРАВЛЕНО: Кнопка профиля (теперь скобки в порядке)
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=
-    ])
+    # ИСПРАВЛЕНО: Кнопка профиля (теперь скобки в порядке 100%)
+    buttons =]
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 # --- КОРЗИНА ---
@@ -102,7 +102,6 @@ async def checkout(callback: types.CallbackQuery):
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
     pay_kb_list = []
-    
     if crypto:
         try:
             invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
@@ -111,7 +110,6 @@ async def checkout(callback: types.CallbackQuery):
         except Exception as e:
             logging.error(f"Ошибка создания инвойса: {e}")
 
-    # Сборка клавиатуры оплаты
     pay_kb = InlineKeyboardMarkup(inline_keyboard=pay_kb_list) if pay_kb_list else None
 
     pay_msg = (
@@ -137,8 +135,9 @@ async def check_pay(callback: types.CallbackQuery):
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=,
-    ])
+    adm_buttons =,
+    ]
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=adm_buttons)
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
@@ -146,8 +145,8 @@ async def admin_decision(callback: types.CallbackQuery):
     await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
         await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 МСК.", parse_mode="Markdown")
-        next_kb = InlineKeyboardMarkup(inline_keyboard=
-        ])
+        next_btn =]
+        next_kb = InlineKeyboardMarkup(inline_keyboard=next_btn)
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
         await bot.send_message(uid, "💎 **UC зачислены!** Оставьте отзыв ⭐")
@@ -159,7 +158,7 @@ async def admin_decision(callback: types.CallbackQuery):
 # --- ВСЁ ОСТАЛЬНОЕ ---
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
+    await message.answer("🕒 Пн-Пт: 15:00-23:00\nСб-Вс: 10:00-00:00")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
