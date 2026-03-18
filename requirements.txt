@@ -2,4 +2,3 @@ aiogram
 aiosqlite
 pytz
 aiohttp
-aiocryptopay
