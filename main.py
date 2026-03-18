@@ -11,69 +11,102 @@ import db
 # Настройка логов
 logging.basicConfig(level=logging.INFO)
 
+# Инициализируем бота и диспетчер
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Инициализация оплаты (используем тестовую сеть или основную)
-crypto = AioCryptoPay(token=config.CRYPTO_PAY_TOKEN, network=Networks.MAIN_NET)
+# Объявляем переменную для крипто-платежей (инициализируем в main)
+crypto = None
 
+# --- БАЗОВЫЕ КОМАНДЫ ---
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await db.register_user(message.from_user.id)
     await message.answer(f"Привет! Добро пожаловать в магазин UC.", reply_markup=kb.main_menu)
 
+@dp.message(F.text == "👤 Профиль")
+async def profile(message: types.Message):
+    user_data = await db.get_profile(message.from_user.id)
+    if user_data:
+        text = (f"👤 Ваш профиль:\n"
+                f"🆔 ID: {message.from_user.id}\n"
+                f"💰 Баланс: {user_data['balance']}₽\n"
+                f"🎮 PUBG ID: {user_data['pubg_id']}")
+    else:
+        text = "Ошибка загрузки профиля. Попробуйте /start"
+    await message.answer(text)
+
 @dp.message(F.text == "💎 Купить UC")
 async def shop(message: types.Message):
-    await message.answer("Выберите нужное количество UC:", reply_markup=kb.buy_tokens)
+    await message.answer("Выберите пакет UC для покупки:", reply_markup=kb.buy_tokens)
 
-# Обработка выбора товара
+# --- ЛОГИКА ОПЛАТЫ ---
 @dp.callback_query(F.data.startswith("buy_"))
-async def create_invoice(callback: types.CallbackQuery):
+async def create_order(callback: types.CallbackQuery):
+    global crypto
+    # Разбираем callback: buy_60_80 -> ['buy', '60', '80']
     data = callback.data.split("_")
     uc_amount = data[1]
     price_rub = int(data[2])
     
-    # Конвертируем рубли в доллары (примерный курс 95, CryptoBot любит USD/USDT)
+    # Примерный курс RUB -> USDT (95)
     amount_usd = round(price_rub / 95, 2)
     
-    # Создаем счет в CryptoBot
+    # Создаем инвойс в CryptoBot
     invoice = await crypto.create_invoice(asset='USDT', amount=amount_usd)
     
     await callback.message.edit_text(
-        f"🛒 Заказ: {uc_amount} UC\n"
+        f"🛒 Оформление заказа:\n"
+        f"📦 Товар: {uc_amount} UC\n"
         f"💵 Сумма: {price_rub}₽ (~{amount_usd} USDT)\n\n"
-        f"Оплата принимается через CryptoBot. Нажмите кнопку ниже:",
+        f"Оплатите по кнопке ниже и нажмите 'Проверить'",
         reply_markup=kb.payment_kb(invoice.bot_invoice_url, invoice.invoice_id)
     )
 
-# Проверка оплаты
 @dp.callback_query(F.data.startswith("check_"))
-async def check_pay(callback: types.CallbackQuery):
+async def check_payment(callback: types.CallbackQuery):
+    global crypto
     invoice_id = int(callback.data.split("_")[1])
     
-    # Получаем данные о счете
+    # Запрашиваем счета по ID
     invoices = await crypto.get_invoices(invoice_ids=invoice_id)
     
-    # Если список не пуст и статус 'paid'
+    # Проверяем статус (статус может быть в списке или объекте в зависимости от версии либы)
     if invoices and invoices.status == 'paid':
-        await callback.message.delete()
-        await callback.message.answer(f"✅ Оплата подтверждена! Спасибо за покупку.\n"
-                                     f"Администратор @{config.SUPPORT_LINK} свяжется с вами для начисления UC.")
-        
-        # Уведомление админу
-        await bot.send_message(config.ADMIN_ID, f"🔔 Новый заказ оплачен!\nID: {callback.from_user.id}\nInvoice ID: {invoice_id}")
+        await callback.message.edit_text("✅ Оплата получена! В ближайшее время UC будут зачислены.")
+        # Уведомление тебе как админу
+        await bot.send_message(config.ADMIN_ID, f"🔔 ЗАКАЗ ОПЛАЧЕН!\nЮзер: {callback.from_user.id}\nInvoice ID: {invoice_id}")
     else:
-        await callback.answer("❌ Оплата еще не найдена. Попробуйте через минуту.", show_alert=True)
+        await callback.answer("❌ Оплата еще не поступила. Попробуйте через минуту.", show_alert=True)
 
-async def on_startup():
-    await db.db_start()
+# --- ДОПОЛНИТЕЛЬНЫЕ КНОПКИ ---
+@dp.message(F.text == "🎟 Промокоды и Скидки")
+async def promos(message: types.Message):
+    await message.answer("Раздел промокодов:", reply_markup=kb.social_kb)
 
+@dp.message(F.text == "🎧 Поддержка")
+async def support(message: types.Message):
+    await message.answer(f"По всем вопросам пишите: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 Мы работаем ежедневно с 10:00 до 22:00 по МСК.")
+
+# --- ЗАПУСК ---
 async def main():
-    dp.startup.register(on_startup)
+    global crypto
+    # Инициализируем CryptoPay внутри асинхронного цикла
+    crypto = AioCryptoPay(token=config.CRYPTO_PAY_TOKEN, network=Networks.MAIN_NET)
+    
+    # Запуск БД
+    await db.db_start()
+    
+    # Запуск поллинга
+    print("Бот запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Бот выключен")
+    except (KeyboardInterrupt, SystemExit):
+        print("Бот остановлен")
