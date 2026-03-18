@@ -68,7 +68,7 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     
-    # ИСПРАВЛЕНО: Кнопка профиля (теперь скобки в порядке 100%)
+    # ИСПРАВЛЕНО: Кнопка профиля (строка 70-74)
     buttons =]
     edit_kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
@@ -78,7 +78,6 @@ async def profile_menu(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Индексы: 2 - UC, 3 - Цена
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -101,21 +100,21 @@ async def checkout(callback: types.CallbackQuery):
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    pay_kb_list = []
+    p_list = []
     if crypto:
         try:
             invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
-            pay_kb_list.append()
-            pay_kb_list.append()
+            p_list.append()
+            p_list.append()
         except Exception as e:
-            logging.error(f"Ошибка создания инвойса: {e}")
+            logging.error(f"Ошибка инвойса: {e}")
 
-    pay_kb = InlineKeyboardMarkup(inline_keyboard=pay_kb_list) if pay_kb_list else None
+    pay_kb = InlineKeyboardMarkup(inline_keyboard=p_list) if p_list else None
 
     pay_msg = (
         f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
         f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n"
-        f"✅ Оплати через кнопку выше (авто) или пришли скрин чека (ручной)!"
+        f"✅ Оплати через кнопку (авто) или пришли скрин чека (ручной)!"
     )
     await callback.message.answer(pay_msg, reply_markup=pay_kb, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
@@ -125,40 +124,37 @@ async def check_pay(callback: types.CallbackQuery):
     inv_id = int(callback.data.split("_")[1])
     invs = await crypto.get_invoice(invoice_id=inv_id)
     if invs and invs.status == 'paid':
-        await callback.message.answer("✅ Оплата получена! Админ уведомлен.")
-        await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nЮзер: @{callback.from_user.username}\nСумма: {invs.amount} {invs.fiat}")
+        await callback.message.answer("✅ Оплата получена!")
+        await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nЮзер: @{callback.from_user.username}\nСумма: {invs.amount}")
     else:
-        await callback.answer("❌ Оплата еще не поступила!", show_alert=True)
+        await callback.answer("❌ Еще не оплачено", show_alert=True)
 
 # --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    adm_buttons =,
+    adm_btn =,
     ]
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=adm_buttons)
-    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
+    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=InlineKeyboardMarkup(inline_keyboard=adm_btn))
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
     await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
-        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 МСК.", parse_mode="Markdown")
+        await bot.send_message(uid, "✅ Оплата принята! Зачислим после 15:00.")
         next_btn =]
-        next_kb = InlineKeyboardMarkup(inline_keyboard=next_btn)
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=next_kb)
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА", reply_markup=InlineKeyboardMarkup(inline_keyboard=next_btn))
     elif action == "done":
-        await bot.send_message(uid, "💎 **UC зачислены!** Оставьте отзыв ⭐")
+        await bot.send_message(uid, "💎 UC зачислены! Оставь отзыв ⭐")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
     elif action == "no":
-        await bot.send_message(uid, "❌ **Отказ.** Свяжитесь с поддержкой.")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
+        await bot.send_message(uid, "❌ Отказ. Пиши в поддержку.")
 
-# --- ВСЁ ОСТАЛЬНОЕ ---
+# --- ОСТАЛЬНОЕ ---
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 Пн-Пт: 15:00-23:00\nСб-Вс: 10:00-00:00")
+    await message.answer("🕒 Будни: 15:00-23:00\nВыходные: 10:00-00:00")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
@@ -170,7 +166,7 @@ async def social_links(message: types.Message):
 
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer(); await callback.message.answer("🎁 Введите промокод:"); await state.set_state(Form.waiting_for_promo)
+    await callback.answer(); await callback.message.answer("🎁 Введи промокод:"); await state.set_state(Form.waiting_for_promo)
 
 @dp.message(Form.waiting_for_promo)
 async def process_promo(message: types.Message, state: FSMContext):
