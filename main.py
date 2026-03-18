@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+from aiohttp import web  # Нужно добавить в requirements.txt
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiocryptopay import AioCryptoPay, Networks
@@ -15,8 +17,23 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Глобальная переменная, которую мы заполним ВНУТРИ функции main
+# Глобальная переменная для оплаты
 crypto = None
+
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не было ошибки портов) ---
+async def handle(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    # Render дает порт 10000 по умолчанию
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"Web server started on port {port}")
 
 # --- БАЗОВЫЕ КОМАНДЫ ---
 @dp.message(Command("start"))
@@ -43,41 +60,39 @@ async def shop(message: types.Message):
 # --- ЛОГИКА ОПЛАТЫ ---
 @dp.callback_query(F.data.startswith("buy_"))
 async def create_order(callback: types.CallbackQuery):
-    global crypto # Используем глобальный объект
+    global crypto
     data = callback.data.split("_")
-    # Индексы: 0-"buy", 1-"количество UC", 2-"цена"
     uc_amount = data[1]
     price_rub = int(data[2])
     
-    # Примерный курс RUB -> USDT (95)
+    # Курс RUB -> USDT
     amount_usd = round(price_rub / 95, 2)
     
-    # Создаем инвойс в CryptoBot
+    # Создаем инвойс
     invoice = await crypto.create_invoice(asset='USDT', amount=amount_usd)
     
     await callback.message.edit_text(
         f"🛒 Оформление заказа:\n"
         f"📦 Товар: {uc_amount} UC\n"
         f"💵 Сумма: {price_rub}₽ (~{amount_usd} USDT)\n\n"
-        f"Оплатите по кнопке ниже и нажмите 'Проверить'",
+        f"Оплатите и нажмите 'Проверить'",
         reply_markup=kb.payment_kb(invoice.bot_invoice_url, invoice.invoice_id)
     )
 
 @dp.callback_query(F.data.startswith("check_"))
 async def check_payment(callback: types.CallbackQuery):
-    global crypto # Используем глобальный объект
+    global crypto
     invoice_id = int(callback.data.split("_")[1])
     
-    # Запрашиваем инвойс
     invoices = await crypto.get_invoices(invoice_ids=invoice_id)
     
     if invoices and invoices.status == 'paid':
-        await callback.message.edit_text("✅ Оплата получена! В ближайшее время UC будут зачислены.")
-        await bot.send_message(config.ADMIN_ID, f"🔔 ЗАКАЗ ОПЛАЧЕН!\nЮзер: {callback.from_user.id}\nInvoice ID: {invoice_id}")
+        await callback.message.edit_text("✅ Оплата получена! Ожидайте начисления.")
+        await bot.send_message(config.ADMIN_ID, f"🔔 ОПЛАЧЕНО!\nЮзер: {callback.from_user.id}\nИнвойс: {invoice_id}")
     else:
-        await callback.answer("❌ Оплата еще не поступила.", show_alert=True)
+        await callback.answer("❌ Оплата не найдена.", show_alert=True)
 
-# --- ДОПОЛНИТЕЛЬНЫЕ КНОПКИ ---
+# --- ПРОЧИЕ КНОПКИ ---
 @dp.message(F.text == "🎟 Промокоды и Скидки")
 async def promos(message: types.Message):
     await message.answer("Раздел промокодов:", reply_markup=kb.social_kb)
@@ -86,18 +101,18 @@ async def promos(message: types.Message):
 async def support(message: types.Message):
     await message.answer(f"По всем вопросам пишите: @{config.SUPPORT_LINK}")
 
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 Мы работаем ежедневно с 10:00 до 22:00 по МСК.")
-
 # --- ЗАПУСК ---
 async def main():
     global crypto
-    # ВАЖНО: Инициализация внутри асинхронной функции main
+    # 1. Запускаем "затычку" для Render
+    asyncio.create_task(start_web_server())
+    
+    # 2. Инициализируем оплату
     crypto = AioCryptoPay(token=config.CRYPTO_PAY_TOKEN, network=Networks.MAIN_NET)
     
+    # 3. База и Бот
     await db.db_start()
-    print("Бот запущен!")
+    print("Бот запущен и порт открыт!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
