@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Инициализация CryptoPay с проверкой токена в конфиге
+# Инициализация CryptoPay
 try:
     crypto = CryptoPay(token=config.CRYPTO_PAY_TOKEN)
 except Exception as e:
@@ -68,7 +68,7 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     
-    # ИСПРАВЛЕНО: Кнопка профиля
+    # ИСПРАВЛЕНО: Кнопка профиля (теперь скобки в порядке)
     edit_kb = InlineKeyboardMarkup(inline_keyboard=
     ])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
@@ -90,7 +90,7 @@ async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
     await callback.answer("🗑 Очищено"); await callback.message.edit_text("🛒 Корзина пуста.", reply_markup=kb.buy_tokens)
 
-# --- ОФОРМЛЕНИЕ ЗАКАЗА (ИСПРАВЛЕНО!) ---
+# --- ОФОРМЛЕНИЕ ЗАКАЗА ---
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
     await callback.answer(); uid = callback.from_user.id
@@ -103,7 +103,6 @@ async def checkout(callback: types.CallbackQuery):
     
     pay_kb_list = []
     
-    # Генерация инвойса CryptoBot
     if crypto:
         try:
             invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
@@ -112,12 +111,13 @@ async def checkout(callback: types.CallbackQuery):
         except Exception as e:
             logging.error(f"Ошибка создания инвойса: {e}")
 
+    # Сборка клавиатуры оплаты
     pay_kb = InlineKeyboardMarkup(inline_keyboard=pay_kb_list) if pay_kb_list else None
 
     pay_msg = (
         f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
         f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n"
-        f"✅ Оплати через кнопку (авто) или пришли скрин чека при переводе на карту (ручной)!"
+        f"✅ Оплати через кнопку выше (авто) или пришли скрин чека (ручной)!"
     )
     await callback.message.answer(pay_msg, reply_markup=pay_kb, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
@@ -125,7 +125,7 @@ async def checkout(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("check_"))
 async def check_pay(callback: types.CallbackQuery):
     inv_id = int(callback.data.split("_")[1])
-    invs = await crypto.get_invoices(invoice_ids=inv_id)
+    invs = await crypto.get_invoice(invoice_id=inv_id)
     if invs and invs.status == 'paid':
         await callback.message.answer("✅ Оплата получена! Админ уведомлен.")
         await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nЮзер: @{callback.from_user.username}\nСумма: {invs.amount} {invs.fiat}")
@@ -159,7 +159,7 @@ async def admin_decision(callback: types.CallbackQuery):
 # --- ВСЁ ОСТАЛЬНОЕ ---
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 Пн-Пт: 15:00-23:00\nСб-Вс: 10:00-00:00")
+    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
