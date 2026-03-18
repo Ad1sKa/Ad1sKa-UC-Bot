@@ -19,7 +19,11 @@ buy_tokens = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="📦 660 UC — 750₽", callback_data="buy_660_750")],
         [InlineKeyboardButton(text="📦 1800 UC — 1920₽", callback_data="buy_1800_1920")],
         [InlineKeyboardButton(text="📦 3850 UC — 3800₽", callback_data="buy_3850_3800")],
-        [InlineKeyboardButton(text="📦 8100 UC — 7400₽", callback_data="buy_8100_7400")]
+        [InlineKeyboardButton(text="📦 8100 UC — 7400₽", callback_data="buy_8100_7400")],
+        [InlineKeyboardButton(text="📦 16200 UC — 15200₽", callback_data="buy_16200_15200")],
+        [InlineKeyboardButton(text="📦 24300 UC — 22700₽", callback_data="buy_24300_22700")],
+        [InlineKeyboardButton(text="📦 32400 UC — 30000₽", callback_data="buy_32400_30000")],
+        [InlineKeyboardButton(text="📦 40500 UC — 38000₽", callback_data="buy_40500_38000")]
     ]
 )
 
