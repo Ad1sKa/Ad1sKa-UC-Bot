@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Объявляем переменную для крипто-платежей (инициализируем в main)
+# Глобальная переменная, которую мы заполним ВНУТРИ функции main
 crypto = None
 
 # --- БАЗОВЫЕ КОМАНДЫ ---
@@ -43,9 +43,9 @@ async def shop(message: types.Message):
 # --- ЛОГИКА ОПЛАТЫ ---
 @dp.callback_query(F.data.startswith("buy_"))
 async def create_order(callback: types.CallbackQuery):
-    global crypto
-    # Разбираем callback: buy_60_80 -> ['buy', '60', '80']
+    global crypto # Используем глобальный объект
     data = callback.data.split("_")
+    # Индексы: 0-"buy", 1-"количество UC", 2-"цена"
     uc_amount = data[1]
     price_rub = int(data[2])
     
@@ -65,19 +65,17 @@ async def create_order(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("check_"))
 async def check_payment(callback: types.CallbackQuery):
-    global crypto
+    global crypto # Используем глобальный объект
     invoice_id = int(callback.data.split("_")[1])
     
-    # Запрашиваем счета по ID
+    # Запрашиваем инвойс
     invoices = await crypto.get_invoices(invoice_ids=invoice_id)
     
-    # Проверяем статус (статус может быть в списке или объекте в зависимости от версии либы)
     if invoices and invoices.status == 'paid':
         await callback.message.edit_text("✅ Оплата получена! В ближайшее время UC будут зачислены.")
-        # Уведомление тебе как админу
         await bot.send_message(config.ADMIN_ID, f"🔔 ЗАКАЗ ОПЛАЧЕН!\nЮзер: {callback.from_user.id}\nInvoice ID: {invoice_id}")
     else:
-        await callback.answer("❌ Оплата еще не поступила. Попробуйте через минуту.", show_alert=True)
+        await callback.answer("❌ Оплата еще не поступила.", show_alert=True)
 
 # --- ДОПОЛНИТЕЛЬНЫЕ КНОПКИ ---
 @dp.message(F.text == "🎟 Промокоды и Скидки")
@@ -95,13 +93,10 @@ async def schedule(message: types.Message):
 # --- ЗАПУСК ---
 async def main():
     global crypto
-    # Инициализируем CryptoPay внутри асинхронного цикла
+    # ВАЖНО: Инициализация внутри асинхронной функции main
     crypto = AioCryptoPay(token=config.CRYPTO_PAY_TOKEN, network=Networks.MAIN_NET)
     
-    # Запуск БД
     await db.db_start()
-    
-    # Запуск поллинга
     print("Бот запущен!")
     await dp.start_polling(bot)
 
