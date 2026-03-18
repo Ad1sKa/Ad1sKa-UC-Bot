@@ -70,12 +70,24 @@ async def profile_menu(message: types.Message):
     edit_kb = InlineKeyboardMarkup(inline_keyboard=])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
+
+@dp.message(F.text == "🎧 Поддержка")
+async def support_h(message: types.Message):
+    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
+async def social_links(message: types.Message):
+    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
+
 # --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Исправленные индексы для cart_add_UC_PRICE
+    # Индексы: 2 - UC, 3 - Цена
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -100,9 +112,9 @@ async def checkout(callback: types.CallbackQuery):
     
     pay_kb = InlineKeyboardMarkup(inline_keyboard=[])
     
-    # Пытаемся создать инвойс в CryptoBot
     if crypto:
         try:
+            # Создаем инвойс в RUB (фиат)
             invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
             pay_kb.inline_keyboard.append()
             pay_kb.inline_keyboard.append()
@@ -132,7 +144,8 @@ async def check_pay(callback: types.CallbackQuery):
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=])
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=,
+    ])
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
@@ -140,7 +153,8 @@ async def admin_decision(callback: types.CallbackQuery):
     await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
         await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒", parse_mode="Markdown")
-        next_kb = InlineKeyboardMarkup(inline_keyboard=])
+        next_kb = InlineKeyboardMarkup(inline_keyboard=
+        ])
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
         await bot.send_message(uid, "💎 **UC зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
@@ -149,19 +163,7 @@ async def admin_decision(callback: types.CallbackQuery):
         await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
 
-# --- ВСЁ ОСТАЛЬНОЕ ---
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
-
-@dp.message(F.text == "🎧 Поддержка")
-async def support_h(message: types.Message):
-    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
-
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
-async def social_links(message: types.Message):
-    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
-
+# --- ПРОМОКОДЫ И ID ---
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.answer("🎁 Введите промокод:"); await state.set_state(Form.waiting_for_promo)
@@ -176,11 +178,15 @@ async def edit_id(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(Form.waiting_for_pubg_id)
 async def save_id(message: types.Message, state: FSMContext):
-    if message.text.isdigit(): await db.update_pubg_id(message.from_user.id, message.text); await state.clear(); await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
+    if message.text.isdigit():
+        await db.update_pubg_id(message.from_user.id, message.text); await state.clear()
+        await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
 
 async def main():
-    await db.db_start(); asyncio.create_task(start_webserver())
-    print("Запущено!"); await dp.start_polling(bot)
+    await db.db_start()
+    asyncio.create_task(start_webserver())
+    print("Запущено!")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
