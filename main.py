@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
-from aiocryptopay import CryptoPay # Библиотека для оплаты
+from aiocryptopay import CryptoPay
 
 import config
 import kb
@@ -17,8 +17,12 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
 
-# Инициализация оплаты (Проверь, что в config.py есть CRYPTO_PAY_TOKEN)
-crypto = CryptoPay(token=config.CRYPTO_PAY_TOKEN)
+# Инициализация CryptoPay с проверкой
+try:
+    crypto = CryptoPay(token=config.CRYPTO_PAY_TOKEN)
+except Exception as e:
+    logging.error(f"Ошибка инициализации CryptoPay: {e}")
+    crypto = None
 
 user_carts = {}
 
@@ -71,12 +75,11 @@ async def profile_menu(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Индексы: 0:cart, 1:add, 2:uc, 3:price
+    # Исправленные индексы для cart_add_UC_PRICE
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
-    # Убрали счетчик (0/10) как ты просил
     await callback.message.edit_text(f"🛒 Корзина:\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
 
 @dp.callback_query(F.data == "cart_clear")
@@ -84,6 +87,7 @@ async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
     await callback.answer("🗑 Очищено"); await callback.message.edit_text("🛒 Корзина пуста.", reply_markup=kb.buy_tokens)
 
+# --- ОФОРМЛЕНИЕ ЗАКАЗА ---
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
     await callback.answer(); uid = callback.from_user.id
@@ -94,26 +98,29 @@ async def checkout(callback: types.CallbackQuery):
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    # Создаем инвойс в CryptoBot
-    invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
+    pay_kb = InlineKeyboardMarkup(inline_keyboard=[])
     
-    pay_kb = InlineKeyboardMarkup(inline_keyboard=,
-    ])
+    # Пытаемся создать инвойс в CryptoBot
+    if crypto:
+        try:
+            invoice = await crypto.create_invoice(amount=total, fiat='RUB', currency_type='fiat')
+            pay_kb.inline_keyboard.append()
+            pay_kb.inline_keyboard.append()
+        except Exception as e:
+            logging.error(f"Ошибка создания инвойса: {e}")
 
     pay_msg = (
         f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
         f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n"
         f"✅ Нажми на кнопку ниже для авто-оплаты или пришли скрин чека при переводе на карту!"
     )
-    await callback.message.answer(pay_msg, reply_markup=pay_kb, parse_mode="Markdown")
+    await callback.message.answer(pay_msg, reply_markup=pay_kb if pay_kb.inline_keyboard else None, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# ПРОВЕРКА АВТО-ОПЛАТЫ
 @dp.callback_query(F.data.startswith("check_"))
 async def check_pay(callback: types.CallbackQuery):
     inv_id = int(callback.data.split("_")[1])
     invs = await crypto.get_invoices(invoice_ids=inv_id)
-    
     if invs and invs.status == 'paid':
         await callback.message.answer("✅ Оплата получена! Админ уведомлен.")
         await bot.send_message(config.ADMIN_ID, f"💰 **АВТО-ОПЛАТА!**\nЮзер: @{callback.from_user.username}\nСумма: {invs.amount} {invs.fiat}")
@@ -143,6 +150,18 @@ async def admin_decision(callback: types.CallbackQuery):
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
 
 # --- ВСЁ ОСТАЛЬНОЕ ---
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 Будни: 15:00 - 23:00\nВыходные: 10:00 - 00:00")
+
+@dp.message(F.text == "🎧 Поддержка")
+async def support_h(message: types.Message):
+    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
+async def social_links(message: types.Message):
+    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
+
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.answer("🎁 Введите промокод:"); await state.set_state(Form.waiting_for_promo)
