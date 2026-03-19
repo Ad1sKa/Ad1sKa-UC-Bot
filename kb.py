@@ -1,13 +1,12 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # Главное меню
-# Главное меню (kb.py)
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💎 Купить UC"), KeyboardButton(text="👤 Профиль")],
         [KeyboardButton(text="🕒 График"), KeyboardButton(text="🎟 Промокоды и Скидки")],
         [KeyboardButton(text="⭐ Отзывы"), KeyboardButton(text="🎁 Розыгрыши")],
-        [KeyboardButton(text="📜 Правила"), KeyboardButton(text="🎧 Поддержка")] # Добавили кнопку "Правила"
+        [KeyboardButton(text="📜 Правила"), KeyboardButton(text="🎧 Поддержка")]
     ],
     resize_keyboard=True
 )
@@ -34,6 +33,6 @@ buy_tokens = InlineKeyboardMarkup(
 social_kb = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
-        [InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me/ad1skauc")]
+        [InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me")]
     ]
 )
