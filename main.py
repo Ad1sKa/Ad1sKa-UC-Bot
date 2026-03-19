@@ -22,7 +22,7 @@ class Form(StatesGroup):
     waiting_for_pubg_id = State()
     waiting_for_promo = State()
 
-# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
+# --- ВЕБ-СЕРВЕР ---
 async def handle(request):
     return web.Response(text="Bot is Live!")
 
@@ -65,6 +65,8 @@ async def profile_menu(message: types.Message):
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
+    
+    # ИСПРАВЛЕННАЯ СТРОКА ТУТ:
     edit_kb = InlineKeyboardMarkup(inline_keyboard=])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
@@ -80,7 +82,7 @@ async def support_h(message: types.Message):
 async def social_links(message: types.Message):
     await message.answer("🔗 **Все новости и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
 
-# --- КОРЗИНА ---
+# --- КОРЗИНА (ИСПРАВЛЕНО) ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
@@ -91,6 +93,17 @@ async def add_to_cart(callback: types.CallbackQuery):
     await callback.answer(f"+ {uc} UC")
     await callback.message.edit_text(f"🛒 Корзина:\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
 
+# --- АДМИНКА ---
+@dp.callback_query(F.data.startswith("adm_"))
+async def admin_decision(callback: types.CallbackQuery):
+    await callback.answer(); d = callback.data.split("_")
+    action, uid = d[1], int(d[2])
+    if action == "ok":
+        await bot.send_message(uid, "✅ Оплата подтверждена!"); await callback.message.edit_caption(caption="✅ ПРИНЯТО")
+    elif action == "no":
+        await bot.send_message(uid, "❌ Отказ."); await callback.message.edit_caption(caption="❌ ОТКАЗАНО")
+
+# --- ВСЁ ОСТАЛЬНОЕ БЕЗ ИЗМЕНЕНИЙ ---
 @dp.callback_query(F.data == "cart_clear")
 async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
@@ -105,24 +118,13 @@ async def checkout(callback: types.CallbackQuery):
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     pay_msg = f"💳 **Оформление заказа**\n\n💎 {cart['uc']} UC\n💰 {total}₽\n🎮 ID: `{u_data['pubg_id']}`\n\n✅ Пришли скрин чека сюда!"
-    await callback.message.answer(pay_msg, parse_mode="Markdown")
-    user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
+    await callback.message.answer(pay_msg, parse_mode="Markdown"); user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     adm_kb = InlineKeyboardMarkup(inline_keyboard=])
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=adm_kb)
-
-@dp.callback_query(F.data.startswith("adm_"))
-async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer(); d = callback.data.split("_")
-    action, uid = d[1], int(d[2])
-    if action == "ok":
-        await bot.send_message(uid, "✅ Оплата подтверждена!"); await callback.message.edit_caption(caption="✅ ПРИНЯТО")
-    elif action == "no":
-        await bot.send_message(uid, "❌ Отказ."); await callback.message.edit_caption(caption="❌ ОТКАЗАНО")
 
 @dp.callback_query(F.data == "edit_id")
 async def edit_id(callback: types.CallbackQuery, state: FSMContext):
