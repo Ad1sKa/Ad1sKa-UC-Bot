@@ -62,15 +62,13 @@ async def shop_menu(message: types.Message):
 async def profile_menu(message: types.Message):
     user_data = await db.get_profile(message.from_user.id)
     if not user_data: return await message.answer("Нажми /start")
-    
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
     
-    # ТУТ МЫ УБРАЛИ ВСЕ СЛОЖНЫЕ СКОБКИ, ТЕПЕРЬ ОШИБКИ НЕ БУДЕТ:
-    btn = InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=[[btn]])
-    
+    # Исправленный блок кнопок (без двойных скобок)
+    row =
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=[row])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 @dp.message(F.text == "🕒 График")
@@ -85,29 +83,18 @@ async def support_h(message: types.Message):
 async def social_links(message: types.Message):
     await message.answer("🔗 **Все новости и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
 
-# --- КОРЗИНА (ИСПРАВЛЕНО) ---
+# --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Исправили индексы:
+    # Берем 3-й и 4-й элементы (UC и Цена)
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
     await callback.message.edit_text(f"🛒 Корзина:\n💎 {user_carts[uid]['uc']} UC\n💰 {user_carts[uid]['price']}₽", reply_markup=kb.buy_tokens)
 
-# --- АДМИНКА ---
-@dp.callback_query(F.data.startswith("adm_"))
-async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer(); d = callback.data.split("_")
-    action, uid = d[1], int(d[2])
-    if action == "ok":
-        await bot.send_message(uid, "✅ Оплата подтверждена!"); await callback.message.edit_caption(caption="✅ ПРИНЯТО")
-    elif action == "no":
-        await bot.send_message(uid, "❌ Отказ."); await callback.message.edit_caption(caption="❌ ОТКАЗАНО")
-
-# --- ОСТАЛЬНОЕ ---
 @dp.callback_query(F.data == "cart_clear")
 async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
@@ -124,11 +111,24 @@ async def checkout(callback: types.CallbackQuery):
     pay_msg = f"💳 **Оформление заказа**\n\n💎 {cart['uc']} UC\n💰 {total}₽\n🎮 ID: `{u_data['pubg_id']}`\n\n✅ Пришли скрин чека сюда!"
     await callback.message.answer(pay_msg, parse_mode="Markdown"); user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
+# --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=])
+    # Исправленный блок кнопок админа (без двойных скобок)
+    btn_ok = InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}")
+    btn_no = InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=[[btn_ok, btn_no]])
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=adm_kb)
+
+@dp.callback_query(F.data.startswith("adm_"))
+async def admin_decision(callback: types.CallbackQuery):
+    await callback.answer(); d = callback.data.split("_")
+    action, uid = d[1], int(d[2])
+    if action == "ok":
+        await bot.send_message(uid, "✅ Оплата подтверждена!"); await callback.message.edit_caption(caption="✅ ПРИНЯТО")
+    elif action == "no":
+        await bot.send_message(uid, "❌ Отказ."); await callback.message.edit_caption(caption="❌ ОТКАЗАНО")
 
 @dp.callback_query(F.data == "edit_id")
 async def edit_id(callback: types.CallbackQuery, state: FSMContext):
