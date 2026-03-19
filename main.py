@@ -58,27 +58,19 @@ async def profile_menu(message: types.Message):
     if not user_data: return await message.answer("Нажми /start")
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
-    if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=])
+    if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
+    
+    # Кнопка профиля (ИСПРАВЛЕНО)
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=
+    ])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
-
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅")
-
-@dp.message(F.text == "🎧 Поддержка")
-async def support_h(message: types.Message):
-    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
-
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
-async def social_links(message: types.Message):
-    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
 
 # --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
+    # Индексы: 2 - UC, 3 - Цена
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -94,14 +86,17 @@ async def clear_cart(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
     await callback.answer(); uid = callback.from_user.id
-    if uid not in user_carts or user_carts[uid]['count'] == 0: return await callback.message.answer("🛒 Пусто!")
+    if uid not in user_carts or user_carts[uid]['count'] == 0: 
+        return await callback.message.answer("🛒 Пусто!")
+    
     u_data = await db.get_profile(uid)
-    if not u_data or u_data["pubg_id"] == "Не указан": return await callback.message.answer("⚠️ Укажи ID в профиле!")
+    if not u_data or u_data["pubg_id"] == "Не указан": 
+        return await callback.message.answer("⚠️ Укажи ID в профиле!")
     
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    # Отправляем инвойс (ту самую шторку)
+    # Отправляем шторку оплаты
     await bot.send_invoice(
         chat_id=uid,
         title=f"Покупка {cart['uc']} UC",
@@ -109,36 +104,38 @@ async def checkout(callback: types.CallbackQuery):
         payload=f"order_{uid}",
         provider_token=config.PAYMENTS_TOKEN,
         currency="RUB",
-        prices=[LabeledPrice(label="Заказ в Ad1sKa Shop", amount=total * 100)], # Сумма в копейках
+        prices=[LabeledPrice(label="Заказ в Ad1sKa Shop", amount=total * 100)],
         start_parameter="uc_topup"
     )
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# ПОДТВЕРЖДЕНИЕ ПЛАТЕЖА
 @dp.pre_checkout_query(lambda query: True)
 async def pre_checkout_query(pre_checkout_q: PreCheckoutQuery):
     await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
 
-# УСПЕШНАЯ ОПЛАТА
 @dp.message(F.successful_payment)
 async def successful_payment(message: types.Message):
     await message.answer(f"✅ Оплата принята! UC будут зачислены после 15:00 МСК.")
     await bot.send_message(config.ADMIN_ID, f"💰 **НОВАЯ ОПЛАТА!**\nЮзер: @{message.from_user.username}\nСумма: {message.successful_payment.total_amount // 100} RUB")
 
-# --- АДМИНКА (ДЛЯ СКРИНШОТОВ) ---
+# --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=])
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=,
+    ])
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
+    await callback.answer(); d = callback.data.split("_")
+    action, uid = d[1], int(d[2])
+    
     if action == "ok":
         await bot.send_message(uid, "✅ Оплата принята! Зачислим после 15:00.")
-        next_kb = InlineKeyboardMarkup(inline_keyboard=])
+        next_kb = InlineKeyboardMarkup(inline_keyboard=
+        ])
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
         await bot.send_message(uid, "💎 UC зачислены! Оставь отзыв ⭐")
@@ -147,6 +144,18 @@ async def admin_decision(callback: types.CallbackQuery):
         await bot.send_message(uid, "❌ Оплата отклонена.")
 
 # --- ОСТАЛЬНОЕ ---
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 Будни: 15:00-23:00\nВыходные: 10:00-00:00")
+
+@dp.message(F.text == "🎧 Поддержка")
+async def support_h(message: types.Message):
+    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
+async def social_links(message: types.Message):
+    await message.answer("🔗 Новости в канале:", reply_markup=kb.social_kb)
+
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.answer("🎁 Введите промокод:"); await state.set_state(Form.waiting_for_promo)
@@ -161,11 +170,15 @@ async def edit_id(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(Form.waiting_for_pubg_id)
 async def save_id(message: types.Message, state: FSMContext):
-    if message.text.isdigit(): await db.update_pubg_id(message.from_user.id, message.text); await state.clear(); await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
+    if message.text.isdigit():
+        await db.update_pubg_id(message.from_user.id, message.text); await state.clear()
+        await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
 
 async def main():
-    await db.db_start(); asyncio.create_task(start_webserver())
-    print("Запущено!"); await dp.start_polling(bot)
+    await db.db_start()
+    asyncio.create_task(start_webserver())
+    print("Запущено!")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
