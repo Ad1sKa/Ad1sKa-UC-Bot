@@ -73,7 +73,17 @@ async def support_h(message: types.Message):
 @dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
 async def social_links(message: types.Message):
     await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
-
+    @dp.message(F.text == "📜 Правила")
+async def rules_menu(message: types.Message):
+    rules_text = (
+        "📜 **Правила нашего магазина:**\n\n"
+        "1. **Оплата:** Перевод осуществляется по указанным реквизитам. Обязательно присылайте чек.\n"
+        "2. **Сроки:** Зачисление UC происходит в течение рабочего времени (см. График).\n"
+        "3. **Данные:** Тщательно проверяйте свой PUBG ID. Ошибка в ID может привести к потере средств.\n"
+        "4. **Возврат:** После подтверждения оплаты и начала обработки заказа возврат средств невозможен.\n\n"
+        "По всем вопросам: @{config.SUPPORT_LINK}"
+    )
+    await message.answer(rules_text, parse_mode="Markdown")
 # --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
