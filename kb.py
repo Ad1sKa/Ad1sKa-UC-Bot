@@ -33,6 +33,6 @@ buy_tokens = InlineKeyboardMarkup(
 social_kb = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Ввести промокод", callback_data="act_promo")],
-        [InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me")]
+        [InlineKeyboardButton(text="🔗 Перейти в канал", url="https://t.me/ad1skauc")]
     ]
 )
