@@ -1,12 +1,13 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # Главное меню
+# Главное меню (kb.py)
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💎 Купить UC"), KeyboardButton(text="👤 Профиль")],
         [KeyboardButton(text="🕒 График"), KeyboardButton(text="🎟 Промокоды и Скидки")],
         [KeyboardButton(text="⭐ Отзывы"), KeyboardButton(text="🎁 Розыгрыши")],
-        [KeyboardButton(text="🎧 Поддержка")], [KeyboardButton(text="📜 Правила")]
+        [KeyboardButton(text="📜 Правила"), KeyboardButton(text="🎧 Поддержка")] # Добавили кнопку "Правила"
     ],
     resize_keyboard=True
 )
