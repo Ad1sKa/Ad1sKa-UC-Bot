@@ -53,7 +53,7 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     
-    # Использование Builder исключает ошибки со скобками
+    # СТРОКИ 64-65: ОСТАВЛЕНО БЕЗ ИЗМЕНЕНИЙ ПО ТВОЕЙ ПРОСЬБЕ
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="✏️ Изменить PUBG ID", callback_data="edit_id"))
     builder.row(InlineKeyboardButton(text="🎟 Активировать промокод", callback_data="act_promo"))
@@ -95,8 +95,10 @@ async def checkout(callback: types.CallbackQuery):
         start_parameter="uc_topup"
     )
 
+# ЭТОТ БЛОК ОТВЕЧАЕТ ЗА ТО, ЧТОБЫ ЭКРАН "РЕКВИЗИТЫ" ИСЧЕЗАЛ
 @dp.pre_checkout_query()
 async def pre_checkout_query_handler(pre_checkout_q: PreCheckoutQuery):
+    print(f"--- ПРОВЕРКА ОПЛАТЫ ОТ {pre_checkout_q.from_user.id} ---")
     await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
 
 @dp.message(F.successful_payment)
