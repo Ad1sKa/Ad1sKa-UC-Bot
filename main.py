@@ -22,7 +22,6 @@ class Form(StatesGroup):
     waiting_for_pubg_id = State()
     waiting_for_promo = State()
 
-# --- ВЕБ-СЕРВЕР ---
 async def handle(request):
     return web.Response(text="Bot is Live!")
 
@@ -35,22 +34,20 @@ async def start_webserver():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# --- КОМАНДЫ ---
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await db.register_user(message.from_user.id)
-    await message.answer(f"Привет! 🏆 Магазин Ad1sKa UC готов к работе.", reply_markup=kb.main_menu)
+    await message.answer("Привет! 🏆 Магазин Ad1sKa UC готов к работе.", reply_markup=kb.main_menu)
 
-# --- МЕНЮ ---
 @dp.message(F.text.contains("Правила"))
 async def rules_menu(message: types.Message):
     rules_text = (
-        "📜 **Правила нашего магазина:**\n\n"
-        "1. **Оплата:** Перевод по реквизитам. Обязательно присылайте скриншот чека в чат.\n"
-        "2. **Сроки:** Зачисление UC происходит в рабочее время (см. График).\n"
-        "3. **Данные:** Проверяйте свой PUBG ID. Ошибка в ID — ответственность покупателя.\n"
-        "4. **Возврат:** После начала обработки заказа возврат средств невозможен.\n\n"
-        f"По всем вопросам: @{config.SUPPORT_LINK}"
+        "📜 **Правила магазина:**\n\n"
+        "1. Оплата по реквизитам. Присылайте скриншот чека.\n"
+        "2. Зачисление в рабочее время (см. График).\n"
+        "3. Проверяйте PUBG ID. Ошибка в ID — ваша ответственность.\n"
+        "4. Возврат после начала обработки невозможен.\n\n"
+        f"Поддержка: @{config.SUPPORT_LINK}"
     )
     await message.answer(rules_text, parse_mode="Markdown")
 
@@ -66,29 +63,27 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
     
-    # Исправленный блок кнопок (без двойных скобок)
-    row =
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=[row])
+    # Создаем кнопку без лишних скобок
+    btn = InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=list([list([btn])]))
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅", parse_mode="Markdown")
+    await message.answer("🕒 **График:**\nБудни: 15:00 - 23:00\nВыходные: 10:00 - 00:00", parse_mode="Markdown")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
     await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
 
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
+@dp.message(F.text.in_(list(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"])))
 async def social_links(message: types.Message):
-    await message.answer("🔗 **Все новости и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
+    await message.answer("🔗 Новости в канале:", reply_markup=kb.social_kb)
 
-# --- КОРЗИНА ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Берем 3-й и 4-й элементы (UC и Цена)
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -108,17 +103,15 @@ async def checkout(callback: types.CallbackQuery):
     if not u_data or u_data["pubg_id"] == "Не указан": return await callback.message.answer("⚠️ Укажи ID в профиле!")
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
-    pay_msg = f"💳 **Оформление заказа**\n\n💎 {cart['uc']} UC\n💰 {total}₽\n🎮 ID: `{u_data['pubg_id']}`\n\n✅ Пришли скрин чека сюда!"
+    pay_msg = f"💳 **Оплата**\n\n💎 {cart['uc']} UC\n💰 {total}₽\n🎮 ID: `{u_data['pubg_id']}`\n\n✅ Пришли скрин чека сюда!"
     await callback.message.answer(pay_msg, parse_mode="Markdown"); user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
-    # Исправленный блок кнопок админа (без двойных скобок)
-    btn_ok = InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}")
-    btn_no = InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=[[btn_ok, btn_no]])
+    b1 = InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}")
+    b2 = InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=list([list([b1, b2])]))
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
@@ -136,7 +129,8 @@ async def edit_id(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(Form.waiting_for_pubg_id)
 async def save_id(message: types.Message, state: FSMContext):
-    if message.text.isdigit(): await db.update_pubg_id(message.from_user.id, message.text); await state.clear(); await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
+    if message.text.isdigit():
+        await db.update_pubg_id(message.from_user.id, message.text); await state.clear(); await message.answer("✅ Сохранено!", reply_markup=kb.main_menu)
 
 async def main():
     await db.db_start(); asyncio.create_task(start_webserver())
