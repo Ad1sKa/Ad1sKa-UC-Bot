@@ -23,7 +23,6 @@ class Form(StatesGroup):
     waiting_for_pubg_id = State()
     waiting_for_promo = State()
 
-# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 async def handle(request):
     return web.Response(text="Bot is Live!")
 
@@ -53,11 +52,7 @@ async def profile_menu(message: types.Message):
     if not user_data: return await message.answer("Нажми /start")
     
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
-    msg = (f"👤 **Мой профиль**\n\n"
-           f"🆔 Твой ID: `{message.from_user.id}`\n"
-           f"🎮 PUBG ID: `{pid}`\n"
-           f"💰 Баланс: {bal}₽\n"
-           f"🔥 Скидка: {disc}%")
+    msg = (f"👤 **Мой профиль**\n\n🆔 Твой ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽\n🔥 Скидка: {disc}%")
     
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id"))
@@ -69,27 +64,14 @@ async def profile_menu(message: types.Message):
 async def rules_menu(message: types.Message):
     rules_text = (
         "📜 **Правила нашего магазина:**\n\n"
-        "1️⃣ **Сроки зачисления:** UC приходят после 15:00 МСК (в будни) или в течение дня (в выходные).\n"
-        "2️⃣ **Верный ID:** Вы несете полную ответственность за указанный PUBG ID. Если ID неверный, возврат невозможен.\n"
-        "3️⃣ **Оплата:** Принимаем чеки только из официальных банковских приложений.\n"
-        "4️⃣ **Возврат:** Возврат средств после зачисления товара не осуществляется.\n\n"
-        "Покупая у нас, вы автоматически соглашаетесь с данными правилами. Приятных покупок! 🍀"
+        "1️⃣ **Сроки зачисления:** UC приходят после 15:00 МСК.\n"
+        "2️⃣ **Верный ID:** Вы несете ответственность за PUBG ID. Ошиблись — UC ушли другому.\n"
+        "3️⃣ **Возврат:** После оплаты возврат средств невозможен.\n"
+        "4️⃣ **Оплата:** Через безопасный шлюз Telegram Payments."
     )
     await message.answer(rules_text, parse_mode="Markdown")
 
-@dp.message(F.text == "🕒 График")
-async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00 МСК!*", parse_mode="Markdown")
-
-@dp.message(F.text == "🎧 Поддержка")
-async def support_h(message: types.Message):
-    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
-
-@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
-async def social_links(message: types.Message):
-    await message.answer("🔗 **Все новости, отзывы и бонусы в нашем канале:**", reply_markup=kb.social_kb, parse_mode="Markdown")
-
-# --- КОРЗИНА И ОФОРМЛЕНИЕ ---
+# --- КОРЗИНА И ПЛАТЕЖИ ---
 @dp.callback_query(F.data.startswith("cart_add_"))
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
@@ -102,44 +84,67 @@ async def add_to_cart(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
-    await callback.answer(); uid = callback.from_user.id
-    if uid not in user_carts or user_carts[uid]['count'] == 0: return await callback.message.answer("🛒 Пусто!")
+    await callback.answer()
+    uid = callback.from_user.id
     u_data = await db.get_profile(uid)
-    if not u_data or u_data["pubg_id"] == "Не указан": return await callback.message.answer("⚠️ Укажи ID в профиле!")
     
-    cart = user_carts[uid]; total = cart['price']
-    if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
+    if uid not in user_carts or user_carts[uid]['count'] == 0: 
+        return await callback.message.answer("🛒 Ваша корзина пуста!")
     
-    pay_msg = (
-        f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
-        f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n✅ Пришли скрин чека сюда!"
+    if not u_data or u_data["pubg_id"] == "Не указан": 
+        return await callback.message.answer("⚠️ Пожалуйста, укажи свой PUBG ID в профиле перед оплатой!")
+    
+    cart = user_carts[uid]
+    total_price = cart['price']
+    if u_data["discount"] > 0:
+        total_price = int(total_price * (1 - u_data["discount"] / 100))
+
+    # Отправка инвойса Telegram Payments
+    await bot.send_invoice(
+        chat_id=uid,
+        title=f"Заказ {cart['uc']} UC",
+        description=f"Пополнение для PUBG ID: {u_data['pubg_id']}",
+        payload=f"order_{uid}_{cart['uc']}",
+        provider_token=config.PAYMENTS_TOKEN,
+        currency="RUB",
+        prices=[LabeledPrice(label="Покупка UC", amount=total_price * 100)], # Сумма в копейках
+        start_parameter="uc_topup"
     )
-    await callback.message.answer(pay_msg, parse_mode="Markdown")
+
+# Подтверждение готовности принять платеж (экран "Сохранить реквизиты")
+@dp.pre_checkout_query()
+async def process_pre_checkout_query(pre_checkout_q: PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+# Обработка успешной оплаты
+@dp.message(F.successful_payment)
+async def successful_payment(message: types.Message):
+    uid = message.from_user.id
+    payment_info = message.successful_payment
+    u_data = await db.get_profile(uid)
+    
+    # Очищаем корзину после оплаты
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
+    
+    await message.answer(f"✅ **Оплата прошла успешно!**\nСумма: {payment_info.total_amount // 100}₽\n\n💎 UC будут зачислены на ID `{u_data['pubg_id']}` после 15:00 МСК.")
+    
+    # Уведомление админу
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}"))
+    
+    await bot.send_message(
+        config.ADMIN_ID, 
+        f"💰 **НОВАЯ ОПЛАТА (Payments)!**\n👤 Юзер: @{message.from_user.username}\n🎮 ID: `{u_data['pubg_id']}`\n💵 Сумма: {payment_info.total_amount // 100}₽",
+        reply_markup=builder.as_markup()
+    )
 
 # --- АДМИНКА И СОСТОЯНИЯ ---
-@dp.message(F.photo)
-async def handle_screenshot(message: types.Message):
-    u_data = await db.get_profile(message.from_user.id)
-    await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}"))
-    builder.add(InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}"))
-    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=builder.as_markup())
-
-@dp.callback_query(F.data.startswith("adm_"))
-async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
-    if action == "ok":
-        await bot.send_message(uid, "✅ **Оплата подтверждена!**\nЗачисление после 15:00 МСК.", parse_mode="Markdown")
-        builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}"))
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=builder.as_markup())
-    elif action == "done":
-        await bot.send_message(uid, "💎 **UC зачислены!** Оставь отзыв в канале ⭐")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
-    elif action == "no":
-        await bot.send_message(uid, "❌ Оплата отклонена.")
+@dp.callback_query(F.data.startswith("adm_done_"))
+async def admin_done(callback: types.CallbackQuery):
+    uid = int(callback.data.split("_")[2])
+    await bot.send_message(uid, "💎 **UC зачислены!** Приятной игры и ждем вас снова ⭐")
+    await callback.message.edit_text(f"{callback.message.text}\n\n✅ ВЫПОЛНЕНО")
+    await callback.answer("Готово!")
 
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
@@ -160,9 +165,22 @@ async def save_id(message: types.Message, state: FSMContext):
         await state.clear()
         await message.answer("✅ ID сохранен!", reply_markup=kb.main_menu)
 
+# --- ОСТАЛЬНОЕ ---
+@dp.message(F.text == "🕒 График")
+async def schedule(message: types.Message):
+    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅")
+
+@dp.message(F.text == "🎧 Поддержка")
+async def support_h(message: types.Message):
+    await message.answer(f"🎧 Менеджер: @{config.SUPPORT_LINK}")
+
+@dp.message(F.text.in_(["🎟 Промокоды и Скидки", "⭐ Отзывы", "🎁 Розыгрыши"]))
+async def social_links(message: types.Message):
+    await message.answer("🔗 Все новости и отзывы в нашем канале:", reply_markup=kb.social_kb)
+
 async def main():
     await db.db_start(); asyncio.create_task(start_webserver())
-    print("Бот запущен!"); await dp.start_polling(bot)
+    print("Бот запущен на Telegram Payments!"); await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
