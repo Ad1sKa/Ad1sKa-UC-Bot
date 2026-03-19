@@ -14,7 +14,7 @@ main_menu = ReplyKeyboardMarkup(
 # Витрина корзины
 buy_tokens = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="📦 60 UC — 80₽", callback_data="cart_add_60_80")],
+        [InlineKeyboardButton(text="📦 60 UC — 85₽", callback_data="cart_add_60_85")],
         [InlineKeyboardButton(text="📦 325 UC — 400₽", callback_data="cart_add_325_400")],
         [InlineKeyboardButton(text="📦 660 UC — 750₽", callback_data="cart_add_660_750")],
         [InlineKeyboardButton(text="📦 1800 UC — 1920₽", callback_data="cart_add_1800_1920")],
