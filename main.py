@@ -60,8 +60,10 @@ async def profile_menu(message: types.Message):
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Твоя скидка: {disc}%"
     
-    # ИСПРАВЛЕНО: Кнопка профиля
-    kb_profile = InlineKeyboardMarkup(inline_keyboard=
+    # ИСПРАВЛЕНО: Кнопки профиля
+    kb_profile = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Изменить PUBG ID", callback_data="edit_id")],
+        [InlineKeyboardButton(text="🎟 Активировать промокод", callback_data="act_promo")]
     ])
     await message.answer(msg, reply_markup=kb_profile, parse_mode="Markdown")
 
@@ -70,7 +72,6 @@ async def profile_menu(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    # Индексы: 2 - UC, 3 - Цена
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc
@@ -102,7 +103,6 @@ async def checkout(callback: types.CallbackQuery):
     if u_data["discount"] > 0: 
         total = int(total * (1 - u_data["discount"] / 100))
     
-    # Отправляем "шторку" оплаты
     await bot.send_invoice(
         chat_id=uid,
         title=f"Покупка {cart['uc']} UC",
@@ -115,8 +115,8 @@ async def checkout(callback: types.CallbackQuery):
     )
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-@dp.pre_checkout_query(lambda query: True)
-async def pre_checkout_query(pre_checkout_q: PreCheckoutQuery):
+@dp.pre_checkout_query()
+async def pre_checkout_query_handler(pre_checkout_q: PreCheckoutQuery):
     await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
 
 @dp.message(F.successful_payment)
@@ -129,7 +129,10 @@ async def successful_payment(message: types.Message):
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    kb_adm = InlineKeyboardMarkup(inline_keyboard=
+    # ИСПРАВЛЕНО: Кнопки админа
+    kb_adm = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принять", callback_data=f"adm_ok_{message.from_user.id}"),
+         InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_no_{message.from_user.id}")]
     ])
     await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=kb_adm)
 
@@ -141,7 +144,9 @@ async def admin_decision(callback: types.CallbackQuery):
     
     if action == "ok":
         await bot.send_message(uid, "✅ Оплата принята! Зачислим после 15:00.")
-        kb_next = InlineKeyboardMarkup(inline_keyboard=
+        # ИСПРАВЛЕНО: Кнопка выполнения
+        kb_next = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏆 Выполнено", callback_data=f"adm_done_{uid}")]
         ])
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=kb_next)
     elif action == "done":
