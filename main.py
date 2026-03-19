@@ -62,12 +62,15 @@ async def shop_menu(message: types.Message):
 async def profile_menu(message: types.Message):
     user_data = await db.get_profile(message.from_user.id)
     if not user_data: return await message.answer("Нажми /start")
+    
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
     
-    # ИСПРАВЛЕННАЯ СТРОКА ТУТ:
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=])
+    # ТУТ МЫ УБРАЛИ ВСЕ СЛОЖНЫЕ СКОБКИ, ТЕПЕРЬ ОШИБКИ НЕ БУДЕТ:
+    btn = InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=[[btn]])
+    
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 @dp.message(F.text == "🕒 График")
@@ -87,6 +90,7 @@ async def social_links(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
+    # Исправили индексы:
     uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
@@ -103,7 +107,7 @@ async def admin_decision(callback: types.CallbackQuery):
     elif action == "no":
         await bot.send_message(uid, "❌ Отказ."); await callback.message.edit_caption(caption="❌ ОТКАЗАНО")
 
-# --- ВСЁ ОСТАЛЬНОЕ БЕЗ ИЗМЕНЕНИЙ ---
+# --- ОСТАЛЬНОЕ ---
 @dp.callback_query(F.data == "cart_clear")
 async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
