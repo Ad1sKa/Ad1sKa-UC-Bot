@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, PreCheckoutQuery
 from aiohttp import web
 
 import config
@@ -59,12 +59,12 @@ async def profile_menu(message: types.Message):
     bal, pid, disc = user_data["balance"], user_data["pubg_id"], user_data["discount"]
     msg = f"👤 **Профиль:**\n\n🆔 TG ID: `{message.from_user.id}`\n🎮 PUBG ID: `{pid}`\n💰 Баланс: {bal}₽"
     if disc > 0: msg += f"\n🔥 Скидка: {disc}%"
-    edit_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⚙️ Изменить PUBG ID", callback_data="edit_id")]])
+    edit_kb = InlineKeyboardMarkup(inline_keyboard=])
     await message.answer(msg, reply_markup=edit_kb, parse_mode="Markdown")
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00 МСК!*", parse_mode="Markdown")
+    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
@@ -90,6 +90,7 @@ async def clear_cart(callback: types.CallbackQuery):
     user_carts[callback.from_user.id] = {'uc': 0, 'price': 0, 'count': 0}
     await callback.answer("🗑 Очищено"); await callback.message.edit_text("🛒 Корзина пуста.", reply_markup=kb.buy_tokens)
 
+# --- ОФОРМЛЕНИЕ ЗАКАЗА (PAYMENTS) ---
 @dp.callback_query(F.data == "cart_checkout")
 async def checkout(callback: types.CallbackQuery):
     await callback.answer(); uid = callback.from_user.id
@@ -100,36 +101,52 @@ async def checkout(callback: types.CallbackQuery):
     cart = user_carts[uid]; total = cart['price']
     if u_data["discount"] > 0: total = int(total * (1 - u_data["discount"] / 100))
     
-    pay_msg = (
-        f"💳 **Оформление заказа**\n\n💎 **Товар:** {cart['uc']} UC\n💰 **К оплате:** {total}₽\n🎮 **ID:** `{u_data['pubg_id']}`\n\n"
-        f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n✅ Пришли скрин чека сюда!"
+    # Отправляем инвойс (ту самую шторку)
+    await bot.send_invoice(
+        chat_id=uid,
+        title=f"Покупка {cart['uc']} UC",
+        description=f"Для PUBG ID: {u_data['pubg_id']}",
+        payload=f"order_{uid}",
+        provider_token=config.PAYMENTS_TOKEN,
+        currency="RUB",
+        prices=[LabeledPrice(label="Заказ в Ad1sKa Shop", amount=total * 100)], # Сумма в копейках
+        start_parameter="uc_topup"
     )
-    await callback.message.answer(pay_msg, parse_mode="Markdown")
     user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА ---
+# ПОДТВЕРЖДЕНИЕ ПЛАТЕЖА
+@dp.pre_checkout_query(lambda query: True)
+async def pre_checkout_query(pre_checkout_q: PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+# УСПЕШНАЯ ОПЛАТА
+@dp.message(F.successful_payment)
+async def successful_payment(message: types.Message):
+    await message.answer(f"✅ Оплата принята! UC будут зачислены после 15:00 МСК.")
+    await bot.send_message(config.ADMIN_ID, f"💰 **НОВАЯ ОПЛАТА!**\nЮзер: @{message.from_user.username}\nСумма: {message.successful_payment.total_amount // 100} RUB")
+
+# --- АДМИНКА (ДЛЯ СКРИНШОТОВ) ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
     u_data = await db.get_profile(message.from_user.id)
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}"), InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]])
-    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=])
+    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
     await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
-        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒", parse_mode="Markdown")
-        next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА.", reply_markup=next_kb)
+        await bot.send_message(uid, "✅ Оплата принята! Зачислим после 15:00.")
+        next_kb = InlineKeyboardMarkup(inline_keyboard=])
+        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
-        await bot.send_message(uid, "💎 **UC зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
+        await bot.send_message(uid, "💎 UC зачислены! Оставь отзыв ⭐")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
     elif action == "no":
-        await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
+        await bot.send_message(uid, "❌ Оплата отклонена.")
 
-# --- ВСЁ ОСТАЛЬНОЕ ---
+# --- ОСТАЛЬНОЕ ---
 @dp.callback_query(F.data == "act_promo")
 async def start_promo(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer(); await callback.message.answer("🎁 Введите промокод:"); await state.set_state(Form.waiting_for_promo)
