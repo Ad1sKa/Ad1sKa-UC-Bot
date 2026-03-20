@@ -6,7 +6,7 @@ main_menu = ReplyKeyboardMarkup(
         [KeyboardButton(text="💎 Купить UC"), KeyboardButton(text="👤 Профиль")],
         [KeyboardButton(text="🕒 График"), KeyboardButton(text="🎟 Промокоды и Скидки")],
         [KeyboardButton(text="⭐ Отзывы"), KeyboardButton(text="🎁 Розыгрыши")],
-        [KeyboardButton(text="📜 Правила"), KeyboardButton(text="🎧 Поддержка")]
+        [KeyboardButton(text="🎧 Поддержка")]
     ],
     resize_keyboard=True
 )
