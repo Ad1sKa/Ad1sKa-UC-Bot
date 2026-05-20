@@ -119,7 +119,7 @@ async def handle_screenshot(message: types.Message):
 async def admin_decision(callback: types.CallbackQuery):
     await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
-        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nUC будут зачислены после 15:00 по МСК. Ожидайте уведомления! 🕒", parse_mode="Markdown")
+        await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nМожет быть задержка до 30 минут. Ожидайте уведомления! 🕒", parse_mode="Markdown")
         next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
