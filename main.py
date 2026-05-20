@@ -64,7 +64,7 @@ async def profile_menu(message: types.Message):
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 15:00 - 23:00 ✅\nВыходные: 10:00 - 00:00 ✅\n\n*Админ на учебе до 15:00 МСК!*", parse_mode="Markdown")
+    await message.answer("🕒 **График (МСК):**\nБудни: 9:00 - 23:00 ✅\nВыходные:9:00 - 02:00 ✅\n\n*Может быть задержка до 30 минут!*", parse_mode="Markdown")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
