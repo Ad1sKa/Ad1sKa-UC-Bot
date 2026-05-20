@@ -64,7 +64,7 @@ async def profile_menu(message: types.Message):
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 9:00 - 23:00 ✅\nВыходные:9:00 - 02:00 ✅\n\n*Может быть задержка до 30 минут!*", parse_mode="Markdown")
+    await message.answer("🕒 **График (МСК):**\nБудни: 9:00 - 23:00 ✅\nВыходные: 9:00 - 02:00 ✅\n\n*Может быть задержка до 30 минут!*", parse_mode="Markdown")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
@@ -105,15 +105,21 @@ async def checkout(callback: types.CallbackQuery):
         f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n✅ Пришли скрин чека сюда!"
     )
     await callback.message.answer(pay_msg, parse_mode="Markdown")
-    user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
 # --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
-    u_data = await db.get_profile(message.from_user.id)
+    uid = message.from_user.id
+    u_data = await db.get_profile(uid)
+    
+    uc_count = "Не определено"
+    if uid in user_carts and user_carts[uid]['uc'] > 0:
+        uc_count = f"{user_carts[uid]['uc']} UC"
+        user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
+
     await message.answer("⏳ Чек получен! Ждем подтверждения.")
     adm_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}"), InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]])
-    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
+    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 **НОВЫЙ ЧЕК!**\n📦 **Заказ:** {uc_count}\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb, parse_mode="Markdown")
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
