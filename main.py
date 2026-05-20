@@ -123,7 +123,7 @@ async def admin_decision(callback: types.CallbackQuery):
         next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n✅ ОПЛАТА ПРИНЯТА.", reply_markup=next_kb)
     elif action == "done":
-        await bot.send_message(uid, "💎 **UC зачислены на ваш аккаунт!**\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
+        await bot.send_message(uid, "💎 UC зачислены на ваш аккаунт!\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
     elif action == "no":
         await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
