@@ -64,7 +64,7 @@ async def profile_menu(message: types.Message):
 
 @dp.message(F.text == "🕒 График")
 async def schedule(message: types.Message):
-    await message.answer("🕒 **График (МСК):**\nБудни: 9:00 - 23:00 ✅\nВыходные: 9:00 - 02:00 ✅\n\n*Может быть задержка до 30 минут!*", parse_mode="Markdown")
+    await message.answer("🕒 **График (МСК):**\nБудни: 9:00 - 23:00 ✅\nВыходные:9:00 - 02:00 ✅\n\n*Может быть задержка до 30 минут!*", parse_mode="Markdown")
 
 @dp.message(F.text == "🎧 Поддержка")
 async def support_h(message: types.Message):
@@ -79,8 +79,7 @@ async def social_links(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    pr = int(d.pop())
-    uc = int(d.pop())
+    uc, pr = int(d[2]), int(d[3])
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
@@ -106,45 +105,19 @@ async def checkout(callback: types.CallbackQuery):
         f"🏦 **Карта (Беларусбанк):**\n`4246 4100 8081 2321`\n👤 **Владелец:** `KERYMOVA NATALIA`\n\n✅ Пришли скрин чека сюда!"
     )
     await callback.message.answer(pay_msg, parse_mode="Markdown")
+    user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
 
-# --- АДМИНКА (ПОЛНОСТЬЮ ПЕРЕРАБОТАНА) ---
+# --- АДМИНКА ---
 @dp.message(F.photo)
 async def handle_screenshot(message: types.Message):
-    uid = message.from_user.id
-    u_data = await db.get_profile(uid)
-    
-    # Достаем количество UC из корзины покупателя
-    uc_count = "Не определено"
-    if uid in user_carts and user_carts[uid]['uc'] > 0:
-        uc_count = f"{user_carts[uid]['uc']} UC"
-        user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
-
-    # Создаем кнопки админа
-    adm_kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{uid}"),
-        InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{uid}")
-    ]])
-
-    caption_text = f"💰 **НОВЫЙ ЧЕК!**\n📦 **Заказ:** {uc_count}\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}"
-
-    # ЕСЛИ ОТПРАВИТЕЛЬ — ТЫ САМ (АДМИН)
-    if uid == config.ADMIN_ID:
-        # Бот отвечает прямо в этот же чат тебе, выводя кнопки под новым сообщением с чеком
-        await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=caption_text, reply_markup=adm_kb, parse_mode="Markdown")
-    else:
-        # ЕСЛИ ОТПРАВИТЕЛЬ — ОБЫЧНЫЙ КЛИЕНТ
-        # Клиент видит стандартное уведомление о получении
-        await message.answer("⏳ Чек получен! Ждем подтверждения.")
-        # А админу (тебе) в этот же чат прилетает чек с кнопками управления заказа
-        await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=caption_text, reply_markup=adm_kb, parse_mode="Markdown")
+    u_data = await db.get_profile(message.from_user.id)
+    await message.answer("⏳ Чек получен! Ждем подтверждения.")
+    adm_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Оплачено", callback_data=f"adm_ok_{message.from_user.id}"), InlineKeyboardButton(text="❌ Отказ", callback_data=f"adm_no_{message.from_user.id}")]])
+    await bot.send_photo(config.ADMIN_ID, message.photo[-1].file_id, caption=f"💰 НОВЫЙ ЧЕК!\n🎮 ID: `{u_data['pubg_id'] if u_data else '???'}`\n👤 @{message.from_user.username}", reply_markup=adm_kb)
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer()
-    d = callback.data.split("_")
-    uid = int(d.pop())
-    action = d.pop()
-    
+    await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
     if action == "ok":
         await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nМожет быть задержка до 30 минут. Ожидайте уведомления! 🕒", parse_mode="Markdown")
         next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
