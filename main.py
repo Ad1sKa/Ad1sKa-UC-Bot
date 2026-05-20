@@ -79,7 +79,7 @@ async def social_links(message: types.Message):
 async def add_to_cart(callback: types.CallbackQuery):
     uid = callback.from_user.id
     d = callback.data.split("_")
-    uc, pr = int(d[2]), int(d[3])
+    uc, pr = int(d[2]), int(d[3])  # Вернули оригинальные индексы
     if uid not in user_carts: user_carts[uid] = {'uc': 0, 'price': 0, 'count': 0}
     user_carts[uid]['uc'] += uc; user_carts[uid]['price'] += pr; user_carts[uid]['count'] += 1
     await callback.answer(f"+ {uc} UC")
@@ -123,7 +123,7 @@ async def handle_screenshot(message: types.Message):
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: types.CallbackQuery):
-    await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])
+    await callback.answer(); d = callback.data.split("_"); action, uid = d[1], int(d[2])  # Вернули оригинальные индексы
     if action == "ok":
         await bot.send_message(uid, "✅ **Ваша оплата подтверждена!**\n\nМожет быть задержка до 30 минут. Ожидайте уведомления! 🕒", parse_mode="Markdown")
         next_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 Выполнить", callback_data=f"adm_done_{uid}")]])
