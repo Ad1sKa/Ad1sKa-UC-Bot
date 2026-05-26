@@ -126,7 +126,7 @@ async def admin_decision(callback: types.CallbackQuery):
         await bot.send_message(uid, "💎 UC зачислены на ваш аккаунт!\n\nПриятной игры! Пожалуйста, оставьте свой отзыв в нашем канале ⭐")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n🏆 ВЫПОЛНЕНО")
     elif action == "no":
-        await bot.send_message(uid, "❌ **Оплата отклонена.** Свяжитесь с поддержкой.")
+        await bot.send_message(uid, "❌ Оплата отклонена. Свяжитесь с поддержкой.")
         await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n❌ ОТКАЗАНО")
 
 # --- ВСЁ ОСТАЛЬНОЕ ---
